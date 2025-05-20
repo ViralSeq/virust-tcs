@@ -1,7 +1,10 @@
 use crate::cli::BANNER;
 use crate::utils::params::Params;
 use crate::utils::params::RegionParams;
+use crate::utils::params::{validate_cdna_primer, validate_nt_words};
+use std::fs::File;
 use std::io::{self, Write};
+use std::path::PathBuf;
 
 pub fn exec() {
     println!("{}", BANNER);
@@ -38,14 +41,46 @@ pub fn exec() {
     let mut regions: Vec<RegionParams> = Vec::new();
 
     loop {
-        print!("Enter the name for the sequenced region: \n>  ");
-        let region_name = collect_input();
+        let region_name = loop {
+            print!("Enter the name for the sequenced region: \n>  ");
+            let region_name = collect_input();
+            if region_name.is_empty() {
+                eprintln!("Region name cannot be empty. Please enter a valid name.");
+                continue;
+            }
+            if region_name.len() > 20 {
+                eprintln!(
+                    "Region name is too long. Please enter a name with 20 characters or less.\n"
+                );
+                continue;
+            } else {
+                break region_name;
+            }
+        };
 
-        print!("Enter the cDNA primer sequence:\n>  ");
-        let cdna_primer = collect_input().to_uppercase();
+        let cdna_primer = loop {
+            print!("Enter the cDNA primer sequence:\n>  ");
+            let cdna_primer = collect_input().to_uppercase();
 
-        print!("Enter the forward primer sequence:\n>  ");
-        let forward_primer = collect_input().to_uppercase();
+            if validate_cdna_primer(&cdna_primer).is_ok() {
+                break cdna_primer;
+            } else {
+                eprintln!("Invalid cDNA primer sequence. Please enter a valid sequence.");
+                continue;
+            }
+        };
+
+        let forward_primer = loop {
+            print!("Enter the forward primer sequence:\n>  ");
+            let forward_primer = collect_input().to_uppercase();
+
+            if validate_nt_words(&forward_primer).is_ok() {
+                break forward_primer;
+            } else {
+                eprintln!("Invalid forward primer sequence. Please enter a valid sequence.");
+                continue;
+            }
+        };
 
         print!("Enter supermajority cut-off (0.5 - 1.0). Default Simple Majority (0.5):\n>  ");
         let mut majority_cutoff = match collect_input().as_str() {
@@ -158,6 +193,44 @@ pub fn exec() {
     println!("Your input directory: {}", input_dir);
     println!("Your entered parameters: ");
     println!("{}", params);
+
+    print!("\nDo you wish to save the parameters to a JSON file? (y/n):\n>  ");
+    let save = match collect_input().as_str() {
+        "y" | "Y" => true,
+        _ => false,
+    };
+
+    if save {
+        let json = serde_json::to_string_pretty(&params).expect("Failed to serialize");
+        loop {
+            print!("Enter the path to save the JSON file (e.g. /path/to/params.json):\n>  ");
+            let json_path = PathBuf::from(collect_input());
+
+            let mut file = match File::create(&json_path) {
+                Ok(file) => {
+                    println!("File created successfully at {}.", json_path.display());
+                    file
+                }
+                Err(e) => {
+                    eprintln!("Error creating file: {}, retry", e);
+                    continue;
+                }
+            };
+
+            match file.write_all(json.as_bytes()) {
+                Ok(_) => {
+                    println!("Parameters saved to JSON file at {}.", json_path.display());
+                    break;
+                }
+                Err(e) => {
+                    eprintln!("Error writing to file: {}, retry", e);
+                    continue;
+                }
+            }
+        }
+    } else {
+        println!("Parameters not saved. Goodbye!");
+    }
 }
 
 fn collect_input() -> String {

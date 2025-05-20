@@ -1,12 +1,12 @@
 use crate::utils::umi::UMI;
 use bio::alphabets;
-use serde::Deserialize;
 use serde::Deserializer;
 use serde::de::Error;
+use serde::{Deserialize, Serialize};
 use std::error::Error as StdError;
 use std::fmt::Display;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Params {
     #[serde(deserialize_with = "string_or_number_to_f32")]
     pub platform_error_rate: f32,
@@ -19,7 +19,7 @@ pub struct Params {
     pub primer_pairs: Vec<RegionParams>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RegionParams {
     pub region: String,
     pub forward: String,
@@ -58,6 +58,8 @@ impl Display for Params {
         write!(f, "  platform_format: {},\n", self.platform_format)?;
         if let Some(email) = &self.email {
             write!(f, "  email: {},\n", email)?;
+        } else {
+            write!(f, "  email: null,\n")?;
         }
         write!(f, "  primer_pairs: [\n")?;
         for region in &self.primer_pairs {
@@ -154,6 +156,9 @@ pub fn validate_cdna_primer(seq: &str) -> Result<(), Box<dyn StdError>> {
 }
 
 pub fn validate_nt_words(seq: &str) -> Result<(), Box<dyn StdError>> {
+    if seq.is_empty() {
+        return Err("Empty sequence".into());
+    };
     let alphabet = alphabets::dna::iupac_alphabet();
     if !alphabet.is_word(seq.as_bytes()) {
         return Err(format!("Invalid nucleotide sequence: {}", seq).into());
