@@ -100,8 +100,24 @@ impl Params {
     }
 
     pub fn validate(&self) -> Result<(), String> {
-        // TODO: Add validation logic here
-        todo!();
+        self.primer_pairs.iter().try_for_each(|region| {
+            if region.forward.len() != region.cdna.len() {
+                return Err(format!(
+                    "Forward and cDNA primers must be the same length: {} vs {}",
+                    region.forward.len(),
+                    region.cdna.len()
+                ));
+            }
+            if region.ref_start > region.ref_end {
+                return Err(format!(
+                    "ref_start must be less than ref_end: {} vs {}",
+                    region.ref_start, region.ref_end
+                ));
+            }
+            Ok(())
+        })?;
+
+        Ok(())
     }
 }
 

@@ -1,10 +1,11 @@
+use crate::utils::UmiError;
 use core::ops::Range;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
-use std::error;
+use std::error::Error;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum UMIType {
@@ -62,9 +63,9 @@ impl UMI {
     /// let seq = "AAAAAAGGGGG";
     /// let result = UMI::identify(seq);
     /// assert!(result.is_err());
-    /// assert!(result.unwrap_err().to_string() == "No UMI found");
+    /// assert!(result.unwrap_err().to_string() == "No UMI found in cDNA primer: AAAAAAGGGGG");
     /// ```
-    pub fn identify(seq: &str) -> Result<(Self, Range<usize>), Box<dyn error::Error>> {
+    pub fn identify(seq: &str) -> Result<(Self, Range<usize>), Box<dyn Error>> {
         //find UMI, and decide if it is a regular UMI or patterned UMI
         //regular UMI is like a string of Ns of at least 8, for example, "N{11}"
         //patterned UMI is like "N{3}RYN{3}RYN{3}RYN{3}", it has 3-4 blocks of Ns, each with 3-4 Ns, with spacer (any `alphabets::dna::iupac_alphabet()` characters other than N, usually 2-3 characters) in between'
@@ -87,7 +88,7 @@ impl UMI {
                 umi_matching.range(),
             ))
         } else if matching_regular_umi_count > 1 {
-            Err("More than one Regular UMI found, and they do not fit the patterned UMI format. Please check your input.".to_string().into())
+            Err(UmiError::DuplicatedRegularUMI(seq.to_string()).into())
         } else if umi_with_pattern_regex.is_match(seq) {
             // patterned UMI
             let umi_matching = umi_with_pattern_regex.find(seq).unwrap();
@@ -109,7 +110,7 @@ impl UMI {
                 umi_matching.range(),
             ))
         } else {
-            Err("No UMI found".to_string().into())
+            Err(UmiError::NoUMIFound(seq.to_string()).into())
         }
     }
 
@@ -187,7 +188,8 @@ mod tests {
 
         let result = UMI::identify(NO_UMI_FOUND);
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string() == "No UMI found");
+
+        assert!(result.unwrap_err().to_string() == "No UMI found in cDNA primer: AAAAAAGGGGG");
     }
 
     #[test]

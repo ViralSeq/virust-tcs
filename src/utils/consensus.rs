@@ -139,6 +139,7 @@ pub fn consensus_fasta(records: &[fasta::Record], cutoff: f64) -> Result<String,
 }
 
 /// Computes a logistic-transformed probability from a Phred quality score.
+/// There is a graph in /resources that compares the original Phred quality score vs. logistic-transformed probability with differetn k and q0 values.
 ///
 /// # Arguments
 /// * `q` - The Phred quality score (e.g., 20, 30, etc.)

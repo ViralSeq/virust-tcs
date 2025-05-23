@@ -1,7 +1,8 @@
 use clap::Parser;
 use virust_tcs::cli::Args;
 use virust_tcs::cli::Commands;
-use virust_tcs::params_generator;
+use virust_tcs::pipelines::params_generator;
+use virust_tcs::pipelines::tcs;
 
 fn main() {
     let args = Args::parse();
@@ -12,12 +13,10 @@ fn main() {
             param,
             keep_original,
         } => {
-            println!(
-                "Running TCS pipeline with input: {}, param: {}, keep_original: {}",
-                input, param, keep_original
-            );
-            // TODO: Call the function to run the pipeline here
-            todo!();
+            tcs::tcs(&input, &param, keep_original).unwrap_or_else(|err| {
+                eprintln!("Error: {}", err);
+                std::process::exit(1);
+            });
         }
         Commands::Generate {} => {
             // Call the function to generate the param file here
