@@ -1,10 +1,12 @@
-use crate::utils::umi::UMI;
+use std::error::Error as StdError;
+use std::fmt::Display;
+
 use bio::alphabets;
 use serde::Deserializer;
 use serde::de::Error;
 use serde::{Deserialize, Serialize};
-use std::error::Error as StdError;
-use std::fmt::Display;
+
+use crate::utils::umi::UMI;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Params {
@@ -94,11 +96,15 @@ impl Display for RegionParams {
 }
 
 impl Params {
+    /// Reads a JSON string and converts it into a `Params` struct.
+    /// This function uses the `serde_json` library to parse the JSON string.
+    /// It ignores extra fields in the JSON string that are not defined in the `Params` struct.
     pub fn from_json_sting(json_str: &str) -> Result<Self, Box<dyn StdError>> {
         let params = serde_json::from_str(json_str)?;
         Ok(params)
     }
 
+    //TODO: write details of the function
     pub fn validate(&self) -> Result<(), String> {
         self.primer_pairs.iter().try_for_each(|region| {
             if region.forward.len() != region.cdna.len() {
