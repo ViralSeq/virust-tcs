@@ -4,7 +4,7 @@ use std::io::BufReader;
 use bio::io::fastq::{self, Record};
 use flate2::read::MultiGzDecoder;
 
-use crate::utils::tcs_helper::{DataType, FastqFiles};
+use crate::helper::tcs_helper::{fastq_files::DataType, fastq_files::FastqFiles};
 
 /// Reads paried R1 R2 fastq files and returns a vector of tuples containing the records from both files.
 /// The function takes a `FastqFiles` struct as an argument, which contains the paths to the R1 and R2 files.

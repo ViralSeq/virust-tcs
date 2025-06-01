@@ -1,11 +1,12 @@
-use crate::utils::UmiError;
+use std::error::Error;
+
 use core::ops::Range;
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
 use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
-use std::error::Error;
+use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum UMIType {
@@ -15,12 +16,31 @@ pub enum UMIType {
     UMIWithPattern,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UMI {
     pub umi_type: UMIType,
     pub umi_block: String,
     pub information_index: Vec<u32>,
     pub umi_information_block: String,
+}
+
+/// Implementing the `PartialEq` trait for UMI to allow comparison between two UMI instances
+/// This is useful for checking if two UMIs are the same based on their type and information block.
+/// Regions outside the Information block are not considered in the equality check.
+/// This is particularly important when use patterned UMIs, where not all the chars in the umi_block carry the information.
+impl PartialEq for UMI {
+    fn eq(&self, other: &Self) -> bool {
+        self.umi_type == other.umi_type && self.umi_information_block == other.umi_information_block
+    }
+}
+
+#[derive(Error, Debug)]
+pub enum UmiError {
+    #[error("More than one regular UMI found in cDNA primer: {0}")]
+    DuplicatedRegularUMI(String),
+
+    #[error("No UMI found in cDNA primer: {0}")]
+    NoUMIFound(String),
 }
 
 impl UMI {
@@ -33,7 +53,7 @@ impl UMI {
     /// * Returns an error if no UMI is found or if more than one regular UMI is found.
     /// # Example
     /// ```
-    /// use virust_tcs::utils::umi::*;
+    /// use virust_tcs::helper::umi::*;
     /// let seq = "AAAAAANNNNNNNNNNGGGGG";
     /// let (umi, range) = UMI::identify(seq).unwrap();
     /// assert_eq!(umi.umi_type, UMIType::UMI);
@@ -43,7 +63,7 @@ impl UMI {
     /// assert_eq!(range.end, 16);
     /// ```
     /// ```
-    /// use virust_tcs::utils::umi::*;
+    /// use virust_tcs::helper::umi::*;
     /// let seq = "AAAAAANNNRYNNNRYNNNRYNNNGGGGG";
     /// let (umi, range) = UMI::identify(seq).unwrap();
     /// assert_eq!(umi.umi_type, UMIType::UMIWithPattern);
@@ -53,13 +73,13 @@ impl UMI {
     /// assert_eq!(range.end, 24);
     /// ```
     /// ```
-    /// use virust_tcs::utils::umi::*;
+    /// use virust_tcs::helper::umi::*;
     /// let seq = "AAAAAANNNNNNNNNNGGGGGNNNNNNNNN";
     /// let result = UMI::identify(seq);
     /// assert!(result.is_err());
     /// ```
     /// ```
-    /// use virust_tcs::utils::umi::*;
+    /// use virust_tcs::helper::umi::*;
     /// let seq = "AAAAAAGGGGG";
     /// let result = UMI::identify(seq);
     /// assert!(result.is_err());

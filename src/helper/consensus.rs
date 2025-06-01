@@ -5,6 +5,7 @@ use bio::io::fasta;
 use bio::io::fastq;
 use thiserror::Error;
 
+// MARK: ConsensusParams
 /// Consensus parameters for the consensus function.
 /// The `k` parameter controls the steepness of the logistic curve.
 /// The `q0` parameter controls the horizontal shift of the curve.
@@ -15,6 +16,7 @@ pub struct ConsensusParams {
     q0: f64,
 }
 
+// MARK: Default CosnesusParams
 /// Implementing the Default trait for ConsensusParams
 /// allows for easy instantiation with default values.
 /// The default values are `k = 0.2` and `q0 = 30.0`.
@@ -24,6 +26,7 @@ impl Default for ConsensusParams {
     }
 }
 
+// MARK: ConsensusStrategy
 /// Enum for consensus method/strategy.
 /// The `Weighted` variant uses a logistic function to adjust the confidence level based on quality scores.
 /// The `Supermajority` variant uses a super-majority cutoff.
@@ -34,6 +37,7 @@ pub enum ConsensusStrategy {
     SimpleMajority,
 }
 
+// MARK: ConsensusInput
 /// Enum for input type (FASTA or FASTQ).
 /// The `Fastq` variant contains a slice of FASTQ records (bio::io::fastq::record).
 /// The `Fasta` variant contains a slice of FASTA records (bio::io::fasta::record).
@@ -42,6 +46,7 @@ pub enum ConsensusInput<'a> {
     Fasta(&'a [fasta::Record]),
 }
 
+// MARK: ConsensusResult
 /// Output struct, always contain a consensus sequence (Vec<u8>), may have Phred+33 encoded per-base quality scores (for FASTQ only).
 /// The `quality` field is optional and is only present if the input was FASTQ.
 /// The `seq` field contains the consensus sequence.
@@ -52,6 +57,7 @@ pub struct ConsensusResult {
     pub qual: Option<Vec<u8>>,
 }
 
+// MARK: ConsensusError
 #[derive(Error, Debug)]
 pub enum ConsensusError {
     #[error(
@@ -64,6 +70,7 @@ pub enum ConsensusError {
     MissingQualityScores,
 }
 
+// MARK: Consensus function
 /// Unified consensus function that takes a consensus strategy and input type.
 /// This function computes the consensus sequence based on the specified strategy.
 /// It can handle both FASTA and FASTQ inputs.
@@ -76,7 +83,7 @@ pub enum ConsensusError {
 /// * Returns an error if the input records are empty or if the sequences are not of the same length.
 /// # Example 1, consensus with FASTQ input:
 /// ```
-/// use virust_tcs::utils::consensus::{consensus, ConsensusStrategy, ConsensusInput, ConsensusParams};
+/// use virust_tcs::helper::consensus::{consensus, ConsensusStrategy, ConsensusInput, ConsensusParams};
 /// use bio::io::fastq;
 /// use bio::io::fasta;
 /// use std::error::Error;
@@ -99,7 +106,7 @@ pub enum ConsensusError {
 /// ```
 /// # Example 2, consensus with FASTA input, supermajority strategy:
 /// ```
-/// use virust_tcs::utils::consensus::{consensus, ConsensusStrategy, ConsensusInput};
+/// use virust_tcs::helper::consensus::{consensus, ConsensusStrategy, ConsensusInput};
 /// use bio::io::fasta;
 /// use std::error::Error;
 /// use std::str::from_utf8;
@@ -122,7 +129,7 @@ pub enum ConsensusError {
 /// ```
 /// # Example 3, consensus with FASTA input, simple majority strategy:
 /// ```
-/// use virust_tcs::utils::consensus::{consensus, ConsensusStrategy, ConsensusInput};
+/// use virust_tcs::helper::consensus::{consensus, ConsensusStrategy, ConsensusInput};
 /// use bio::io::fasta;
 /// use std::error::Error;
 /// use std::str::from_utf8;
@@ -227,6 +234,7 @@ pub fn consensus(
     })
 }
 
+// MARK: helper functions
 /// Computes a logistic-transformed probability from a Phred quality score.
 /// There is a graph in /resources that compares the original Phred quality score vs. logistic-transformed probability with differetn k and q0 values.
 ///
@@ -365,6 +373,7 @@ pub fn consensus_base_simply_majority(bases: &[u8]) -> u8 {
     }
 }
 
+// MARK: Tests
 #[cfg(test)]
 mod tests {
     use super::*;

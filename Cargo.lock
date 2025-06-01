@@ -1138,6 +1138,7 @@ dependencies = [
  "clap",
  "flate2",
  "itertools",
+ "once_cell",
  "rand 0.9.1",
  "rand_chacha 0.9.0",
  "rayon",

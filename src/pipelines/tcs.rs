@@ -6,10 +6,15 @@ use std::sync::{Arc, Mutex};
 
 use rayon::prelude::*;
 
-use crate::utils::io::read_fastq_file;
-use crate::utils::params::Params;
-use crate::utils::tcs_helper::{FastqFiles, log_line, validate_files};
+use crate::helper::io::read_fastq_file;
+use crate::helper::params::Params;
+use crate::helper::tcs_helper::TcsError;
+use crate::helper::tcs_helper::log_line;
+use crate::helper::tcs_helper::{
+    FastqFiles, PairedRecordFilterResult, filter_r1_r2_pairs, validate_files,
+};
 
+// MARK: tcs main function
 //TODO: write details of the function
 
 pub fn tcs(input: &str, param: &str, keep_original: bool) -> Result<(), Box<dyn Error>> {
@@ -17,11 +22,11 @@ pub fn tcs(input: &str, param: &str, keep_original: bool) -> Result<(), Box<dyn 
 
     // Check if the input directory exists
     if !input_dir.exists() {
-        return Err(format!("Input directory {} does not exist", input).into());
+        return Err(TcsError::InputDirNotFound(input.to_string()).into());
     }
     // Check if the input directory is a valid directory
     if !input_dir.is_dir() {
-        return Err(format!("Input path {} is not a valid directory", input).into());
+        return Err(TcsError::NotADirectory(input.to_string()).into());
     }
 
     let logfile = OpenOptions::new()
@@ -32,6 +37,10 @@ pub fn tcs(input: &str, param: &str, keep_original: bool) -> Result<(), Box<dyn 
     let mut logger = BufWriter::new(logfile);
 
     log_line(&mut logger, "Starting TCS pipeline")?;
+    log_line(
+        &mut logger,
+        &format!("TCS (Rust) Version: {}", env!("CARGO_PKG_VERSION")),
+    )?;
     log_line(&mut logger, &format!("Input directory: {}", input))?;
     log_line(&mut logger, &format!("Param file input: {}", param))?;
     log_line(&mut logger, &format!("Keep original: {}", keep_original))?;
@@ -61,6 +70,7 @@ pub fn tcs(input: &str, param: &str, keep_original: bool) -> Result<(), Box<dyn 
     Ok(())
 }
 
+// MARK: run_tcs_pipeline function
 //TODO: write details of the function
 fn run_tcs_pipeline(
     fastq_files: &FastqFiles,
@@ -71,30 +81,40 @@ fn run_tcs_pipeline(
     let params: Params = Params::from_json_sting(&fs::read_to_string(param)?)?;
     log_line(logger, "Validating Params")?;
 
-    // TODO: Validate the params, finish the implementation
-    params.validate()?;
+    let validated_params = params.validate()?;
 
     let pairs = read_fastq_file(&fastq_files)?;
 
     log_line(logger, "Reading Fastq files")?;
 
     let logs = Arc::new(Mutex::new(Vec::new()));
-    let _errors: Arc<Mutex<Vec<Box<dyn std::error::Error + Send + Sync>>>> =
-        Arc::new(Mutex::new(Vec::new()));
 
+    let errors: Arc<Mutex<Vec<Box<dyn Error + Send + Sync>>>> = Arc::new(Mutex::new(Vec::new()));
     // Process the pairs in parallel
     // TODO: currently, this is just a placeholder for the actual processing
     pairs.par_iter().for_each(|(r1, r2)| {
-        let id1 = r1.id();
-        let id2 = r2.id();
-        let msg = if r1.seq().len() == r2.seq().len() {
-            format!("Processing pair: {} and {}", id1, id2)
-        } else {
-            format!("Skipping pair: {} and {}", id1, id2)
-        };
-        logs.lock().unwrap().push(msg);
-
-        //TODO: populate errors
+        match filter_r1_r2_pairs(r1, r2, &validated_params) {
+            Ok(filtered_pair) => {
+                if let PairedRecordFilterResult::Valid(filtered_pair) = filtered_pair {
+                    // Log the filtered pair
+                    let msg = format!(
+                        "Filtered pair: R1: {}, R2: {}",
+                        filtered_pair.r1.id(),
+                        filtered_pair.r1.id()
+                    );
+                    logs.lock().unwrap().push(msg);
+                } else {
+                    logs.lock()
+                        .unwrap()
+                        .push("Filtered pair is None".to_string());
+                }
+            }
+            Err(e) => {
+                // Log the error
+                let mut errs = errors.lock().unwrap();
+                errs.push(e);
+            }
+        }
     });
 
     for msg in logs.lock().unwrap().iter() {
@@ -105,6 +125,7 @@ fn run_tcs_pipeline(
     todo!();
 }
 
+// MARK: tcs_dr main function
 //TODO: write details of the function
 pub fn tcs_dr(
     input: &str,

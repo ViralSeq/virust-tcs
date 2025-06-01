@@ -1,7 +1,7 @@
 use crate::cli::BANNER;
-use crate::utils::params::Params;
-use crate::utils::params::RegionParams;
-use crate::utils::params::{validate_cdna_primer, validate_nt_words};
+use crate::helper::params::Params;
+use crate::helper::params::RegionParams;
+use crate::helper::params::{validate_cdna_primer, validate_nt_words};
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::PathBuf;

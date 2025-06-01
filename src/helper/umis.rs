@@ -1,4 +1,4 @@
-use crate::utils::umi::UMI;
+use crate::helper::umi::UMI;
 use itertools::Itertools;
 use serde::Deserialize;
 use serde::Serialize;
