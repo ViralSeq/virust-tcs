@@ -7,13 +7,13 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::helper::params::{CDNAMatching, ForwardMatching, ValidatedParams};
-use crate::helper::tcs_helper::error::TcsError;
+use crate::helper::tcs_helper::TcsError;
 use crate::helper::tcs_helper::utils::FastqRecordTrimExt;
 use crate::helper::tcs_helper::utils::diff_by_iupac;
 use crate::helper::umi::UMI;
 
 // MARK: FilteredPair
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct FilteredPair {
     pub region: String,
     pub umi: UMI,
@@ -22,7 +22,7 @@ pub struct FilteredPair {
 }
 
 // MARK: PairedRecordFilterResult
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum PairedRecordFilterResult {
     Valid(FilteredPair),
     Invalid(String),
@@ -30,7 +30,6 @@ pub enum PairedRecordFilterResult {
 
 // MARK: filter_r1_r2_pairs
 
-//TODO: write details of the function
 pub fn filter_r1_r2_pairs(
     r1_record: &Record,
     r2_record: &Record,
@@ -172,6 +171,8 @@ fn general_filter(r1_record: &Record, r2_record: &Record) -> GeneralFilterResult
     let r1_seq = from_utf8(r1_record.seq()).unwrap();
     let r2_seq = from_utf8(r2_record.seq()).unwrap();
 
+    let r1_seq = &r1_seq[4..r1_seq.len()]; // the first 4 bases do not contain any information, it is ok to be Ns. 
+
     let (r1_match, r2_match) = (
         GENERAL_FILTER_REGEX.is_match(r1_seq),
         GENERAL_FILTER_REGEX.is_match(r2_seq),
@@ -272,7 +273,9 @@ fn r2_matching(
 
 mod tests {
     use super::*;
-    use crate::helper::params::{ForwardMatching, validate_cdna_primer};
+    use crate::helper::params::{
+        ForwardMatching, ValidatedRegionParams, validate_cdna_primer, validate_forward_primer,
+    };
     use crate::helper::umi::{UMI, UMIType};
     use bio::io::fastq::Record;
 
@@ -433,5 +436,68 @@ mod tests {
                 )),
             ),
         );
+    }
+
+    #[test]
+    fn test_filter_r1_r2_pairs() {
+        let r2_record = Record::with_attrs(
+            "M01825:522:000000000-C7M6N:1:1101:13543:1027 2:N:0:GCCTTAA",
+            None,
+            b"TACTGTTTTACCAGTCCATTTTGCTCTATTGACGTTACAATGTGCTTGTCTCATATTTCCTATTTTTCCTATTGTAACAAATGCTCTCCCTGGTCCCCTCTGGATACGGATACTTTTTCTTGTATTGTTGTTGGGTCTTGTACAATTAATTTCTACAGATGTGTTCAGCTGTACTATTATGGTTTTAGCATTGTCCGTGAAATTGACAGATCTAATTACTACCTCTTCTTCTGCTAGACTGCCATTTAACAGCAGTTGAGTTGATACTACTGGCCTAATTCCATGTGTACATTGTACTGT",
+            b"CCCCCGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGFGGGGGGGGGGEFCGGGFGGGFFGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGG9BEFGDGGGGGGGGGGGGGGGGGGFGGGGGFGGGGGGGGFFEFGGGGGGGGGFFFGGGGGGGFGFAAFFCGGGGGGGGGCFFGGGGGGGGGGEDGFGGGFGGGGGDFFFFGGGGCFFGGF8DGGGGFGGGGGFF<DBFFGFEEFFGGGFFFFFCEFEEFFFFFFFFFFEEF9@DECEEFEEEECE?EEFFFECEF4*");
+
+        let r1_record = Record::with_attrs(
+            "M01825:522:000000000-C7M6N:1:1101:13543:1027 1:N:0:GCCTTAA",
+            None,
+            b"NGAGTTATGGGATCAAAGCCTAAAGCCATGTGTAAAATTAACCCCACTCTGTGTTAGTTTAAAGTGCACTGATTTGGGGAATGCTACTAATACCAATAGTAGTAATACCAATAGTAGTAGCGGGGAAATGATGATGGAGAAAGGAGAGATAAAAAACTGCTCTTTCAATATCAGCACAAACATAAGAGGTAAGGTGCAGAAAGAATATGCATTTTTTTATAAACTTGATATAGTACCAATAGATAATACCAGCTATAGGTTGATAAGTTGTAACATCTCAGTCATTACACAGGCCTGTCC",
+            b"#8ACCGGGFGG9FEFGGGGGGGEGGGGGFGGGGGGGGGGGGGGGGGGGGGGGGGGGFGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGFGGGGGGGGGGGGGGGGFGGGGGGGGGGGGGGGGGGGGGGGGGGGGGFFGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGDGGGGGGGFGGGGGGGGGGGGGGGGFFGGGGGGGGGGGDGGCGGGGGGFGGFGGGGGFGGF=CFFFFFCFFFFEEAAFFEEF;D6EFE8;",
+        );
+
+        let cdna_primer =
+            "GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCTNNNNNNNNNNNCAGTCCATTTTGCTYTAYTRABVTTACAATRTGC";
+        let cdna_matching = validate_cdna_primer(cdna_primer).unwrap();
+
+        let forward_primer =
+            "GCCTCCCTCGCGCCATCAGAGATGTGTATAAGAGACAGNNNNTTATGGGATCAAAGCCTAAAGCCATGTGTA";
+        let forward_matching = validate_forward_primer(forward_primer).unwrap();
+
+        let region_params = ValidatedRegionParams {
+            platform_error_rate: 0.01,
+            platform_format: 300,
+            region: "test_region".to_string(),
+            forward_matching,
+            cdna_matching,
+            majority: 0.6,
+            end_join: false,
+            end_join_option: 1,
+            overlap: 0,
+            tcs_qc: false,
+            ref_genome: "HXB2".to_string(),
+            ref_start: 0,
+            ref_end: 0,
+            indel: false,
+            trim: false,
+            trim_ref: "HXB2".to_string(),
+            trim_ref_start: 0,
+            trim_ref_end: 0,
+        };
+
+        let validated_params = ValidatedParams {
+            primer_pairs: vec![region_params],
+        };
+
+        let result = filter_r1_r2_pairs(&r1_record, &r2_record, &validated_params);
+        assert!(result.is_ok());
+        let paired_result = result.unwrap();
+        dbg!(&paired_result);
+        match paired_result {
+            PairedRecordFilterResult::Valid(filtered_pair) => {
+                assert_eq!(filtered_pair.region, "test_region");
+                assert_eq!(filtered_pair.umi.umi_information_block, "TACTGTTTTAC");
+                assert_eq!(filtered_pair.r1.seq(), b"AAATTAACCCCACTCTGTGTTAGTTTAAAGTGCACTGATTTGGGGAATGCTACTAATACCAATAGTAGTAATACCAATAGTAGTAGCGGGGAAATGATGATGGAGAAAGGAGAGATAAAAAACTGCTCTTTCAATATCAGCACAAACATAAGAGGTAAGGTGCAGAAAGAATATGCATTTTTTTATAAACTTGATATAGTACCAATAGATAATACCAGCTATAGGTTGATAAGTTGTAACATCTCAGTCATTACACAGGCCTGTC");
+                assert_eq!(filtered_pair.r2.seq(), b"TTGTCTCATATTTCCTATTTTTCCTATTGTAACAAATGCTCTCCCTGGTCCCCTCTGGATACGGATACTTTTTCTTGTATTGTTGTTGGGTCTTGTACAATTAATTTCTACAGATGTGTTCAGCTGTACTATTATGGTTTTAGCATTGTCCGTGAAATTGACAGATCTAATTACTACCTCTTCTTCTGCTAGACTGCCATTTAACAGCAGTTGAGTTGATACTACTGGCCTAATTCCATGTGTACATTGTACTG");
+            }
+            PairedRecordFilterResult::Invalid(msg) => panic!("Expected valid pair, got: {}", msg),
+        }
     }
 }
