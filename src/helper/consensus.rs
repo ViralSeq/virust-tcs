@@ -26,6 +26,23 @@ impl Default for ConsensusParams {
     }
 }
 
+impl ConsensusParams {
+    /// Creates a new instance of ConsensusParams with specified k and q0 values.
+    /// # Arguments
+    /// * `k` - The steepness parameter of the logistic curve.
+    /// * `q0` - The midpoint of the logistic curve (controls horizontal shift).
+    pub fn new(k: f64, q0: f64) -> Self {
+        Self { k, q0 }
+    }
+
+    pub fn k(&self) -> f64 {
+        self.k
+    }
+    pub fn q0(&self) -> f64 {
+        self.q0
+    }
+}
+
 // MARK: ConsensusStrategy
 /// Enum for consensus method/strategy.
 /// The `Weighted` variant uses a logistic function to adjust the confidence level based on quality scores.

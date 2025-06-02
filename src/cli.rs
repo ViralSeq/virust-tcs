@@ -37,6 +37,16 @@ pub enum Commands {
         /// keep original files
         #[arg(long, default_value_t = false)]
         keep_original: bool,
+
+        /// The steepness parameter of the logistic curve for quality score transformation
+        /// Default at 0.2
+        #[arg(long, default_value_t = 0.2)]
+        steepness: f32,
+
+        /// The midpoint of the logistic curve, which is the quality score at which the transformation is half-way
+        /// Default at 30
+        #[arg(long, default_value_t = 30)]
+        midpoint: u8,
     },
 
     /// Generate a param file through CLI

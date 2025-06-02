@@ -12,8 +12,10 @@ fn main() {
             input,
             param,
             keep_original,
+            steepness,
+            midpoint,
         } => {
-            tcs::tcs(&input, &param, keep_original).unwrap_or_else(|err| {
+            tcs::tcs(&input, &param, keep_original, steepness, midpoint).unwrap_or_else(|err| {
                 eprintln!("Error: {}", err);
                 std::process::exit(1);
             });
