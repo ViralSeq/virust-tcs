@@ -155,6 +155,19 @@ impl Display for RegionParams {
 }
 
 impl Params {
+    /// Empty constructor for `Params` struct.
+    /// This function initializes a `Params` struct with empty fields.
+    /// # Returns
+    /// * `Params` - A new instance of `Params` with default values.
+    pub fn new() -> Self {
+        Params {
+            platform_error_rate: 0.0,
+            platform_format: 0,
+            email: None,
+            primer_pairs: Vec::new(),
+        }
+    }
+
     /// Reads a JSON string and converts it into a `Params` struct.
     /// This function uses the `serde_json` library to parse the JSON string.
     /// It ignores extra fields in the JSON string that are not defined in the `Params` struct.

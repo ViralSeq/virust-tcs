@@ -8,7 +8,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Hash, Eq)]
 pub enum UMIType {
     /// Unique Molecular Identifier, regular UMI, for example, "N{11}"
     UMI,
@@ -16,7 +16,7 @@ pub enum UMIType {
     UMIWithPattern,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, Eq)]
 pub struct UMI {
     pub umi_type: UMIType,
     pub umi_block: String,

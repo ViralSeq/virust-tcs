@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-#[derive(Error, Debug)]
+#[derive(Error, Debug, Clone, Serialize, Deserialize)]
 pub enum TcsError {
     #[error("Input directory does not exist: {0}")]
     InputDirNotFound(String),
@@ -32,4 +33,6 @@ pub enum TcsError {
         "Invalid read length: Platform Format: {0}, should be equal or less to Read 1 Length: {1} and Read 2: {2}"
     )]
     InvalidReadLength(usize, usize, usize),
+    #[error("Unexpected error: {0}")]
+    UnexpectedError(String),
 }

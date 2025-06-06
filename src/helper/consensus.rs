@@ -48,6 +48,7 @@ impl ConsensusParams {
 /// The `Weighted` variant uses a logistic function to adjust the confidence level based on quality scores.
 /// The `Supermajority` variant uses a super-majority cutoff.
 /// The `SimpleMajority` variant uses a simple majority rule.
+#[derive(Debug, Copy, Clone)]
 pub enum ConsensusStrategy {
     Weighted(ConsensusParams),
     Supermajority(f64),
@@ -179,7 +180,7 @@ pub enum ConsensusError {
 pub fn consensus(
     strategy: ConsensusStrategy,
     input: ConsensusInput,
-) -> Result<ConsensusResult, Box<dyn Error>> {
+) -> Result<ConsensusResult, Box<dyn Error + Send + Sync>> {
     // Extract sequence and (optionally) qualities by input type
     let (seqs, quals_opt): (Vec<Vec<u8>>, Option<Vec<Vec<u8>>>) = match input {
         ConsensusInput::Fastq(records) => (
