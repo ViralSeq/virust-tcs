@@ -29,8 +29,12 @@ pub fn tcs(
     let (mut tcs_report, mut logger) = tcs_init(input)?;
 
     let advanced_settings = AdvancedSettings::from_attr(keep_original, steepness, midpoint);
-
     tcs_report.set_advanced_settings(advanced_settings);
+
+    // log the start of the TCS pipeline
+    log_line(&mut logger, "Starting TCS pipeline")?;
+
+    // Run the TCS main function
 
     let (tcs_report, r1_r2_path) = match tcs_main(tcs_report, &mut logger, param, advanced_settings)
     {

@@ -59,6 +59,7 @@ pub enum ConsensusStrategy {
 /// Enum for input type (FASTA or FASTQ).
 /// The `Fastq` variant contains a slice of FASTQ records (bio::io::fastq::record).
 /// The `Fasta` variant contains a slice of FASTA records (bio::io::fasta::record).
+#[derive(Debug, Clone)]
 pub enum ConsensusInput<'a> {
     Fastq(&'a [fastq::Record]),
     Fasta(&'a [fasta::Record]),

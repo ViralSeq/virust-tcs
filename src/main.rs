@@ -16,7 +16,7 @@ fn main() {
             midpoint,
         } => {
             tcs::tcs(&input, &param, keep_original, steepness, midpoint).unwrap_or_else(|err| {
-                eprintln!("Error: {} occurred during processing but it could not be recorded the log file", err);
+                eprintln!("Fatal Error: {} occurred during processing", err);
                 std::process::exit(1);
             });
         }
