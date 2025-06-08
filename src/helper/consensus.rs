@@ -66,7 +66,7 @@ pub enum ConsensusInput<'a> {
 }
 
 // MARK: ConsensusResult
-/// Output struct, always contain a consensus sequence (Vec<u8>), may have Phred+33 encoded per-base quality scores (for FASTQ only).
+/// Output struct, always contain a consensus sequence (`Vec<u8>`), may have Phred+33 encoded per-base quality scores (for FASTQ only).
 /// The `quality` field is optional and is only present if the input was FASTQ.
 /// The `seq` field contains the consensus sequence.
 /// The `qual` field contains the Phred-scaled quality scores.

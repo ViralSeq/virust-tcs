@@ -4,6 +4,9 @@ use bio::io::fasta;
 use bio::io::fastq;
 use getset::{Getters, Setters};
 
+const MIN_OVERLAP: usize = 10; // minimum overlap length, can be adjusted
+const ERROR_RATE_FOR_ENDJOINING: f64 = 0.02; // allowed error rate, can be adjusted
+
 /// Strategy for joining two ends of sequences.
 /// This enum defines how the end joining should be performed based on the overlap information.
 /// - `Simple`: No overlap check, just concatenate the sequences.
@@ -35,8 +38,8 @@ pub enum EndJoiningStrategy {
 /// which is useful for applications that may work with either format.
 #[derive(Debug, Clone)]
 pub enum EndJoiningInput<'a> {
-    Fasta((&'a [fasta::Record], &'a [fasta::Record])),
-    Fastq((&'a [fastq::Record], &'a [fastq::Record])),
+    Fasta((&'a fasta::Record, &'a fasta::Record)),
+    Fastq((&'a fastq::Record, &'a fastq::Record)),
 }
 
 impl EndJoiningInput<'_> {
@@ -93,10 +96,10 @@ impl EndJoiningResult {
 /// This information is crucial for understanding how the two sequences align and where they can be joined.
 /// The offset is interpreted as follows:
 /// # Offset interpretation:
-/// - offset = 0: r2 aligns to the very first position of r1.
-/// - offset > 0: r2 is shifted to the right, aligning with a later position in r1.
-/// - offset < 0: r2 hangs off the left end of r1.
-/// - offset = r1.len(): r2 is completely after r1; no overlap.
+/// - `offset == 0`: r2 aligns to the very first position of r1.
+/// - `offset > 0`: r2 is shifted to the right, aligning with a later position in r1.
+/// - `offset < 0`: r2 hangs off the left end of r1.
+/// - `offset == r1.len()`: r2 is completely after r1; no overlap.
 /// In all cases, only offsets that yield an overlap of at least `min_overlap` are considered.
 /// If there is no acceptable overlap, returns None.
 /// # Example: Overlap offset illustration, positive offset
@@ -108,7 +111,7 @@ impl EndJoiningResult {
 ///
 /// An offset of 3 means r2 starts at position 3 of r1:
 /// ```
-/// Overlap length: 5 (from r1[3..8] vs r2[0..5])
+/// Overlap length: 5 (from `r1[3..8]` vs `r2[0..5]`)
 ///
 /// # Example: Negative offset
 /// ```text
@@ -119,7 +122,7 @@ impl EndJoiningResult {
 ///
 /// An offset of -3 means r1 starts at position 3 of r2:
 /// ```
-/// Overlap length: 5 (from r1[0..5] vs r2[3..8])
+/// Overlap length: 5 (from `r1[0..5]` vs `r2[3..8]`)
 /// # Example: No overlap, aka overlap_len = 0
 /// ``` text
 /// pos: 0 1 2 3 4 5 6 7
@@ -127,7 +130,7 @@ impl EndJoiningResult {
 /// r2:                   T A C G T T G
 /// pos:                  0 1 2 3 4 5 6
 /// ```
-/// In this case, the offset would be 8 (r1.len()), and the overlap length would be 0.
+/// In this case, the offset would be 8 (`r1.len()`), and the overlap length would be 0.
 /// This indicates that r2 starts after r1 ends, with no overlap.
 #[derive(Debug, Clone, PartialEq, Getters, Setters)]
 pub struct OverlapResult {
@@ -207,15 +210,15 @@ pub fn end_joining(
     input.validate_records()?;
     let (r1, r2, q1, q2): (Vec<u8>, Vec<u8>, Option<Vec<u8>>, Option<Vec<u8>>) = match input {
         EndJoiningInput::Fasta((r1, r2)) => {
-            let seq1 = r1[0].seq().to_owned();
-            let seq2 = r2[0].seq().to_owned();
+            let seq1 = r1.seq().to_owned();
+            let seq2 = r2.seq().to_owned();
             (seq1, seq2, None, None) // Fasta does not have quality scores
         }
         EndJoiningInput::Fastq((r1, r2)) => {
-            let seq1 = r1[0].seq().to_owned();
-            let seq2 = r2[0].seq().to_owned();
-            let qual1 = r1[0].qual().to_owned();
-            let qual2 = r2[0].qual().to_owned();
+            let seq1 = r1.seq().to_owned();
+            let seq2 = r2.seq().to_owned();
+            let qual1 = r1.qual().to_owned();
+            let qual2 = r2.qual().to_owned();
             (seq1, seq2, Some(qual1), Some(qual2))
         }
     };
@@ -231,7 +234,7 @@ pub fn end_joining(
         }
         EndJoiningStrategy::UnknownOverlap => {
             // find the best overlap
-            find_best_overlap(&r1, &r2, 10, 0.02) // 10 bp min overlap, 2% error rate, can be adjusted. leave as is for now
+            find_best_overlap(&r1, &r2, MIN_OVERLAP, ERROR_RATE_FOR_ENDJOINING)
         }
     };
 
@@ -336,62 +339,47 @@ pub fn find_best_overlap(
 ///   - If there is no overlap, it returns a concatenated sequence of `r1` and `r2`.
 ///   - If there is an overlap, it returns a sequence that includes the consensus bases from the overlapping region.
 ///   - The quality scores are also included if available, with the consensus quality scores calculated based on the overlapping region.
-pub fn join_with_overlap(
+fn join_with_overlap(
     r1: &[u8],
     r1_qual: Option<&[u8]>,
     r2: &[u8],
     r2_qual: Option<&[u8]>,
     overlap: OverlapResult,
 ) -> EndJoiningResult {
-    // if no overlap, just concatenate r1 and r2
-
-    if overlap.overlap_len == 0 {
-        let mut seq = Vec::with_capacity(r1.len() + r2.len());
-        seq.extend_from_slice(r1);
-        seq.extend_from_slice(r2);
-
-        let quality = match (r1_qual, r2_qual) {
-            (Some(qual1), Some(qual2)) => {
-                let mut qual = Vec::with_capacity(r1.len() + r2.len());
-                qual.extend_from_slice(qual1);
-                qual.extend_from_slice(qual2);
-                Some(qual)
-            }
-            _ => None,
-        };
-        return EndJoiningResult { seq, quality };
-    }
-
-    // when overlap_len > 0, we need to join the sequences with the overlap
     let offset = overlap.offset;
     let overlap_len = overlap.overlap_len;
 
-    // find the position where r2 starts relative to r1
-    let r2_start = if offset < 0 { 0 } else { offset as usize };
-    let r1_prefix_end = r2_start; // r1 before overlap
-    let r2_prefix_len = if offset < 0 { (-offset) as usize } else { 0 };
+    // Calculate prefix regions
+    let (prefix_seq, prefix_qual): (Vec<u8>, Option<Vec<u8>>) = if offset < 0 {
+        let plen = (-offset) as usize;
+        (r2[..plen].to_vec(), r2_qual.map(|q| q[..plen].to_vec()))
+    } else {
+        let plen = offset as usize;
+        (r1[..plen].to_vec(), r1_qual.map(|q| q[..plen].to_vec()))
+    };
 
-    // prepare sequence
-    let mut seq = Vec::with_capacity(
-        r1_prefix_end + overlap_len + r2.len().saturating_sub(overlap_len + r2_prefix_len),
-    );
+    // Calculate starting indices for overlap region
+    let r1_overlap_start = if offset < 0 { 0 } else { offset as usize };
+    let r2_overlap_start = if offset < 0 { (-offset) as usize } else { 0 };
 
-    // r1 prefix beofore overlap
+    // Overlap consensus bases and qualities
+    let mut overlap_seq = Vec::with_capacity(overlap_len);
+    let mut overlap_qual = if r1_qual.is_some() && r2_qual.is_some() {
+        Some(Vec::with_capacity(overlap_len))
+    } else {
+        None
+    };
 
-    seq.extend_from_slice(&r1[..r1_prefix_end]);
-
-    // Overlap region
     for i in 0..overlap_len {
-        let r1_idx = r1_prefix_end + i;
-        let r2_idx = r2_prefix_len + i;
+        let r1_idx = r1_overlap_start + i;
+        let r2_idx = r2_overlap_start + i;
         let base1 = r1[r1_idx];
         let base2 = r2[r2_idx];
 
-        // Consensus rule: if same, keep; else, pick 'N' or pick by quality if possible
+        // Determine consensus base
         let consensus_base = if base1 == base2 {
             base1
         } else {
-            // Use quality if present
             match (r1_qual, r2_qual) {
                 (Some(q1), Some(q2)) => {
                     let q1_val = q1.get(r1_idx).copied().unwrap_or(0);
@@ -401,39 +389,43 @@ pub fn join_with_overlap(
                 _ => b'N',
             }
         };
-        seq.push(consensus_base);
+        overlap_seq.push(consensus_base);
+
+        // Quality: take max if both present
+        if let (Some(q1), Some(q2), Some(overlap_q)) = (r1_qual, r2_qual, &mut overlap_qual) {
+            let q1_val = q1.get(r1_idx).copied().unwrap_or(0);
+            let q2_val = q2.get(r2_idx).copied().unwrap_or(0);
+            overlap_q.push(std::cmp::max(q1_val, q2_val));
+        }
     }
 
-    // r2 suffix after overlap
-    let r2_suffix_start = r2_start + overlap_len;
-    if r2_suffix_start < r2.len() {
-        seq.extend_from_slice(&r2[r2_suffix_start..]);
-    }
+    // Calculate suffix regions
+    let r1_overlap_end = r1_overlap_start + overlap_len;
+    let r2_overlap_end = r2_overlap_start + overlap_len;
+    let (suffix_seq, suffix_qual): (Vec<u8>, Option<Vec<u8>>) = if r1_overlap_end < r1.len() {
+        (
+            r1[r1_overlap_end..].to_vec(),
+            r1_qual.map(|q| q[r1_overlap_end..].to_vec()),
+        )
+    } else if r2_overlap_end < r2.len() {
+        (
+            r2[r2_overlap_end..].to_vec(),
+            r2_qual.map(|q| q[r2_overlap_end..].to_vec()),
+        )
+    } else {
+        (vec![], None)
+    };
 
-    // Build quality vector if both present
-    let quality = match (r1_qual, r2_qual) {
-        (Some(q1), Some(q2)) => {
-            let mut qual = Vec::with_capacity(seq.len());
+    // Final assembly
+    let mut seq = prefix_seq;
+    seq.extend_from_slice(&overlap_seq);
+    seq.extend_from_slice(&suffix_seq);
 
-            // r1 quality before overlap
-            qual.extend_from_slice(&q1[0..r1_prefix_end]);
-
-            // Overlap region
-            for i in 0..overlap_len {
-                let r1_idx = r1_prefix_end + i;
-                let r2_idx = r2_prefix_len + i;
-                let q1_val = q1.get(r1_idx).copied().unwrap_or(0);
-                let q2_val = q2.get(r2_idx).copied().unwrap_or(0);
-                // Use the higher quality score
-                qual.push(std::cmp::max(q1_val, q2_val));
-            }
-
-            // r2 quality after overlap
-            if r2_suffix_start < r2.len() {
-                qual.extend_from_slice(&q2[r2_suffix_start..]);
-            }
-
-            Some(qual)
+    let quality = match (prefix_qual, overlap_qual, suffix_qual) {
+        (Some(mut pre), Some(mut ovl), Some(mut suf)) => {
+            pre.append(&mut ovl);
+            pre.append(&mut suf);
+            Some(pre)
         }
         _ => None,
     };
@@ -442,3 +434,107 @@ pub fn join_with_overlap(
 }
 
 //TODO: Implement tests for end joining
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_find_best_overlap() {
+        let r1 = b"GGGGGGGGGGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        let r2 = b"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAATTTTTTTTTT";
+        let best_overlap = find_best_overlap(r1, r2, MIN_OVERLAP, 0.0);
+        assert_eq!(best_overlap.offset, 10);
+        assert_eq!(best_overlap.overlap_len, 100);
+
+        let r1 = b"ACGTACGT";
+        let r2 = b"TACGTCG";
+        let best_overlap = find_best_overlap(r1, r2, 2, ERROR_RATE_FOR_ENDJOINING);
+        assert_eq!(best_overlap.offset, 3);
+        assert_eq!(best_overlap.overlap_len, 5);
+        assert_eq!(best_overlap.mismatches, 0);
+
+        let r1 = b"GGGGGGGTT";
+        let r2 = b"AAAGGGGGGG";
+        let best_overlap = find_best_overlap(r1, r2, 2, ERROR_RATE_FOR_ENDJOINING);
+        assert_eq!(best_overlap.offset, -3);
+        assert_eq!(best_overlap.overlap_len, 7);
+
+        let r1 = b"GGGGGGGTTTTTTTTTTTTTTT";
+        let r2 = b"AAAAAAAAAAAAAAGGGGGGG";
+        let best_overlap = find_best_overlap(r1, r2, 2, ERROR_RATE_FOR_ENDJOINING);
+        assert_eq!(best_overlap.offset, r1.len() as isize);
+        assert_eq!(best_overlap.overlap_len, 0);
+    }
+
+    #[test]
+    fn test_join1() {
+        let r1 = b"ACGTACGTTACGT";
+        let r2 = b"TACGTTACGTCGA";
+        let fasta1 = fasta::Record::with_attrs("r1", None, r1);
+        let fasta2 = fasta::Record::with_attrs("r2", None, r2);
+        let input = EndJoiningInput::Fasta((&fasta1, &fasta2));
+        let overlap = find_best_overlap(r1, r2, MIN_OVERLAP, ERROR_RATE_FOR_ENDJOINING);
+        assert_eq!(overlap.offset, 3);
+        assert_eq!(overlap.overlap_len, 10);
+        let overlap_result =
+            OverlapResult::from_simple_overlap(r1.len(), r2.len(), overlap.overlap_len);
+        assert_eq!(overlap_result.offset, 3);
+        assert_eq!(overlap_result.overlap_len, 10);
+        let result = end_joining(
+            input.clone(),
+            EndJoiningStrategy::Overlap(overlap.overlap_len),
+        )
+        .unwrap();
+        assert_eq!(result.seq, b"ACGTACGTTACGTCGA");
+        let result = end_joining(input.clone(), EndJoiningStrategy::Overlap(0)).unwrap();
+        assert_eq!(result.seq, b"ACGTACGTTACGTTACGTTACGTCGA");
+    }
+
+    #[test]
+    fn test_join2() {
+        let r1 = b"GGGGGGGTT";
+        let r2 = b"AAAGGGGGGG";
+        let fasta1 = fasta::Record::with_attrs("r1", None, r1);
+        let fasta2 = fasta::Record::with_attrs("r2", None, r2);
+        let input = EndJoiningInput::Fasta((&fasta1, &fasta2));
+        let overlap = find_best_overlap(r1, r2, 4, ERROR_RATE_FOR_ENDJOINING);
+        assert_eq!(overlap.offset, -3);
+        assert_eq!(overlap.overlap_len, 7);
+        let result = join_with_overlap(r1, None, r2, None, overlap.clone());
+        assert_eq!(result.seq, b"AAAGGGGGGGTT");
+
+        let result = end_joining(input.clone(), EndJoiningStrategy::UnknownOverlap);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().seq, b"GGGGGGGTTAAAGGGGGGG");
+    }
+
+    #[test]
+    fn test_join3() {
+        let r1 = b"CCCGGGGGGGTTTTTCCC";
+        let r2 = b"GGGGGTTTTTC";
+
+        let fasta1 = fasta::Record::with_attrs("r1", None, r1);
+        let fasta2 = fasta::Record::with_attrs("r2", None, r2);
+        let input = EndJoiningInput::Fasta((&fasta1, &fasta2));
+        let overlap = find_best_overlap(r1, r2, 10, ERROR_RATE_FOR_ENDJOINING);
+        assert_eq!(overlap.offset, 5);
+        assert_eq!(overlap.overlap_len, 11);
+        let result = end_joining(input.clone(), EndJoiningStrategy::UnknownOverlap);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().seq, b"CCCGGGGGGGTTTTTCCC");
+    }
+
+    #[test]
+    fn test_join4() {
+        let r1 =     b"CAATACATCACAACTGTTTAATAGTACTTGGATTAATGGTACTAGGAAAGGTACTGAAGGAAATGTTACAGAAAATATCATACTCCCATGCAGAATAAAACAAATTATAAACATGTGGCAGGAAGTAGGAAAAGCAATGTATGCCCCTCCCATCAAAGGAATGATTAGATGTTCATCAAATATTACAGGGCTGCTATTAACAAGGGATGGTGGTGAGAACAAAAACAAGAGCGAGCCCGAGGTCTTCAGACCTGGAGGAGGAGATATGAGGGACA";
+        let r2 =        b"TACATCACAACTGTTTAATAGTACTTGGATTAATGGTACTAGGAAAGGTACTGAAGGAAATGTTACAGAAAATATCATACTCCCATGCAGAATAAAACAAATTATAAACATGTGGCAGGAAGTAGGAAAAGCAATGTATGCCCCTCCCATCAAAGGAATGATTAGATGTTCATCAAATATTACAGGGCTGCTATTAACAAGGGATGGTGGTGAGAACAAAAACAAGAGCGAGCCCGAGGTCTTCAGACCTGGAGGAGGAGATATGAGGGAC";
+        let joined = b"CAATACATCACAACTGTTTAATAGTACTTGGATTAATGGTACTAGGAAAGGTACTGAAGGAAATGTTACAGAAAATATCATACTCCCATGCAGAATAAAACAAATTATAAACATGTGGCAGGAAGTAGGAAAAGCAATGTATGCCCCTCCCATCAAAGGAATGATTAGATGTTCATCAAATATTACAGGGCTGCTATTAACAAGGGATGGTGGTGAGAACAAAAACAAGAGCGAGCCCGAGGTCTTCAGACCTGGAGGAGGAGATATGAGGGACA";
+        let fasta1 = fasta::Record::with_attrs("r1", None, r1);
+        let fasta2 = fasta::Record::with_attrs("r2", None, r2);
+        let input = EndJoiningInput::Fasta((&fasta1, &fasta2));
+        let result = end_joining(input.clone(), EndJoiningStrategy::UnknownOverlap);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap().seq, joined);
+    }
+}
