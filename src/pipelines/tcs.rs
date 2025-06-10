@@ -12,7 +12,7 @@ use crate::helper::params::Params;
 use crate::helper::tcs_helper::log_line;
 use crate::helper::tcs_helper::{
     AdvancedSettings, FilteredPair, PairedRecordFilterResult, RegionReport, TcsConsensus, TcsError,
-    TcsReport, TcsReportWarnings, filter_r1_r2_pairs, validate_files,
+    TcsReport, TcsReportWarnings, filter_r1_r2_pairs, join_consensus_fastq_vec, validate_files,
 };
 
 pub fn tcs(
@@ -299,8 +299,16 @@ pub fn tcs_main(
     // We will also create a RegionReport for each region and add it to the TcsReport.
     let mut region_reports = Vec::new(); // This will hold the reports for each region for the field `region_reports` in TcsReport
     for (region, filtered_pairs) in &groups {
+        let region_params =
+            validated_params
+                .get_region_params(region)
+                .ok_or(TcsError::UnexpectedError(format!(
+                    "No parameters found for region: {}",
+                    region
+                )))?;
         let mut region_report = RegionReport::new();
         region_report.set_region_name(region.clone());
+        region_report.set_filtered_reads_for_region(filtered_pairs.len());
         log_line(
             logger,
             &format!(
@@ -319,7 +327,7 @@ pub fn tcs_main(
         // Errors during consensus calling for individual UMI families will be logged, and warnings will be added to the TcsReport.
         // The UMI summary will be collected and added to the RegionReport as part of the TcsReport.
 
-        let (consensus_results, consensus_errors, umi_summary) =
+        let (mut consensus_results, consensus_errors, umi_summary) =
             match TcsConsensus::build_from_filtered_pairs(
                 filtered_pairs,
                 consensus_strategy,
@@ -373,11 +381,70 @@ pub fn tcs_main(
                 consensus_results.len()
             ),
         )?;
+
+        // Start end-joining for the region
+
+        if region_params.end_join {
+            log_line(logger, &format!("End-joining for region: {}", region))?;
+        } else {
+            log_line(
+                logger,
+                &format!(
+                    "End-joining not required for {}, skip end-joining, QC and Trimming",
+                    region
+                ),
+            )?;
+            region_report.set_tcs_consensus_results(Some(consensus_results));
+            region_reports.push(region_report);
+            continue; // Continue to the next region if end-joining is not required
+        }
+
+        // End-joining logic below
+
+        if let Err(error) = join_consensus_fastq_vec(
+            &mut consensus_results,
+            region_params.end_join_option,
+            region_params.overlap as usize,
+        ) {
+            log_line(
+                logger,
+                &format!(
+                    "Error during end-joining for region: {}. Invidual consensus sequences will not be end-joined. Error: {}",
+                    region, error
+                ),
+            )?;
+            tcs_report.add_warning(TcsReportWarnings::EndJoiningErrorWithRegion(
+                region.clone(),
+                error.to_string(),
+            ));
+        };
+
+        log_line(
+            logger,
+            &format!(
+                "End-joining completed for region: {} without warnings",
+                region
+            ),
+        )?;
+
+        // TODO: QC
+
+        if region_params.tcs_qc {
+            log_line(logger, &format!("QC for region: {}", region))?;
+        } else {
+            log_line(
+                logger,
+                &format!("QC not required for {}, skip QC and Trimming", region),
+            )?;
+            region_report.set_tcs_consensus_results(Some(consensus_results));
+            region_reports.push(region_report);
+            continue; // Continue to the next region if QC is not required
+        }
     }
 
     // TODO: downstream processing
     // 1. consensus calling for each region. DONE!
-    // 2. end-joining of consensus sequences.
+    // 2. end-joining of consensus sequences. DONE!
     // 3. qc
     // 4. trimming
     // 5. write fastq and fasta files.

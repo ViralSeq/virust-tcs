@@ -28,6 +28,12 @@ pub struct ValidatedParams {
     pub primer_pairs: Vec<ValidatedRegionParams>,
 }
 
+impl ValidatedParams {
+    pub fn get_region_params(&self, region: &str) -> Option<&ValidatedRegionParams> {
+        self.primer_pairs.iter().find(|p| p.region == region)
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RegionParams {
     pub region: String,

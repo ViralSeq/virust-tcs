@@ -3,10 +3,12 @@ use std::error::Error;
 
 use bio::io::fastq::Record;
 use getset::{Getters, Setters};
-use rayon::prelude::*;
+use rayon::{prelude::*, str};
 use serde::{Deserialize, Serialize};
 
 use crate::helper::consensus;
+use crate::helper::end_joining::EndJoiningInput;
+use crate::helper::end_joining::*;
 use crate::helper::tcs_helper::FilteredPair;
 use crate::helper::umis::{UMIDistError, UMIInformationBlocks, UMISummary};
 
@@ -118,4 +120,53 @@ impl TcsConsensus {
         }
         Ok((tcs_consensus, errors, umi_summary))
     }
+}
+
+pub fn join_consensus_fastq_vec(
+    tcs_consensus: &mut Vec<TcsConsensus>,
+    end_joining_option: u32,
+    overlap_len: usize,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let strategy = match end_joining_option {
+        1 => EndJoiningStrategy::Simple,
+        2 => EndJoiningStrategy::Overlap(overlap_len),
+        _ => EndJoiningStrategy::UnknownOverlap,
+    };
+
+    let errors = tcs_consensus
+        .par_iter_mut()
+        .filter_map(|consensus| {
+            let end_joining_input =
+                EndJoiningInput::Fastq((&consensus.r1_consensus, &consensus.r2_consensus));
+            let joined_consensus = end_joining(end_joining_input, &strategy);
+            match joined_consensus {
+                Ok(joined) => {
+                    let id = format!(
+                        "{}_{}_joined",
+                        consensus.umi_information_block, consensus.umi_family_size
+                    );
+                    let joined_record = Record::with_attrs(
+                        &id,
+                        None,
+                        &joined.seq(),
+                        &joined.quality().as_ref().unwrap(),
+                    );
+                    consensus.set_joined_consensus(Some(joined_record));
+                    None
+                }
+                Err(e) => {
+                    consensus.joined_consensus = None;
+                    Some(format!(
+                        "Error joining consensus for UMI {}: {}",
+                        consensus.umi_information_block, e
+                    ))
+                }
+            }
+        })
+        .collect::<Vec<_>>();
+    if !errors.is_empty() {
+        return Err(errors.join(", ").into());
+    }
+
+    Ok(())
 }

@@ -204,7 +204,7 @@ impl OverlapResult {
 /// ```
 pub fn end_joining(
     input: EndJoiningInput,
-    strategy: EndJoiningStrategy,
+    strategy: &EndJoiningStrategy,
 ) -> Result<EndJoiningResult, Box<dyn Error + Send + Sync>> {
     // Validate the input records
     input.validate_records()?;
@@ -230,7 +230,7 @@ pub fn end_joining(
         }
         EndJoiningStrategy::Overlap(overlap_len) => {
             // use the provided overlap length
-            OverlapResult::from_simple_overlap(r1.len(), r2.len(), overlap_len)
+            OverlapResult::from_simple_overlap(r1.len(), r2.len(), *overlap_len)
         }
         EndJoiningStrategy::UnknownOverlap => {
             // find the best overlap
@@ -433,8 +433,6 @@ fn join_with_overlap(
     EndJoiningResult { seq, quality }
 }
 
-//TODO: Implement tests for end joining
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -483,11 +481,11 @@ mod tests {
         assert_eq!(overlap_result.overlap_len, 10);
         let result = end_joining(
             input.clone(),
-            EndJoiningStrategy::Overlap(overlap.overlap_len),
+            &EndJoiningStrategy::Overlap(overlap.overlap_len),
         )
         .unwrap();
         assert_eq!(result.seq, b"ACGTACGTTACGTCGA");
-        let result = end_joining(input.clone(), EndJoiningStrategy::Overlap(0)).unwrap();
+        let result = end_joining(input.clone(), &EndJoiningStrategy::Overlap(0)).unwrap();
         assert_eq!(result.seq, b"ACGTACGTTACGTTACGTTACGTCGA");
     }
 
@@ -504,7 +502,7 @@ mod tests {
         let result = join_with_overlap(r1, None, r2, None, overlap.clone());
         assert_eq!(result.seq, b"AAAGGGGGGGTT");
 
-        let result = end_joining(input.clone(), EndJoiningStrategy::UnknownOverlap);
+        let result = end_joining(input.clone(), &EndJoiningStrategy::UnknownOverlap);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().seq, b"GGGGGGGTTAAAGGGGGGG");
     }
@@ -520,7 +518,7 @@ mod tests {
         let overlap = find_best_overlap(r1, r2, 10, ERROR_RATE_FOR_ENDJOINING);
         assert_eq!(overlap.offset, 5);
         assert_eq!(overlap.overlap_len, 11);
-        let result = end_joining(input.clone(), EndJoiningStrategy::UnknownOverlap);
+        let result = end_joining(input.clone(), &EndJoiningStrategy::UnknownOverlap);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().seq, b"CCCGGGGGGGTTTTTCCC");
     }
@@ -533,7 +531,7 @@ mod tests {
         let fasta1 = fasta::Record::with_attrs("r1", None, r1);
         let fasta2 = fasta::Record::with_attrs("r2", None, r2);
         let input = EndJoiningInput::Fasta((&fasta1, &fasta2));
-        let result = end_joining(input.clone(), EndJoiningStrategy::UnknownOverlap);
+        let result = end_joining(input.clone(), &EndJoiningStrategy::UnknownOverlap);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().seq, joined);
     }

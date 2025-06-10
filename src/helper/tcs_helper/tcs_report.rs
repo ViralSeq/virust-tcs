@@ -42,7 +42,7 @@ pub struct RegionReport {
     #[getset(get = "pub", set = "pub")]
     filtered_reads_for_region: usize,
     #[getset(get = "pub", set = "pub")]
-    tcs_consensus_results: Option<TcsConsensus>,
+    tcs_consensus_results: Option<Vec<TcsConsensus>>,
     #[getset(get = "pub", set = "pub")]
     umi_summary: Option<UMISummary>,
 }
@@ -124,6 +124,7 @@ pub enum TcsReportWarnings {
     R1R2filteringwarning(String),
     UMIDistErrorWithRegion(String, String),
     ConsensusErrorIndividualWithRegion(String, String),
+    EndJoiningErrorWithRegion(String, String),
 }
 
 impl Display for TcsReportWarnings {
@@ -139,6 +140,13 @@ impl Display for TcsReportWarnings {
                 write!(
                     f,
                     "Encountered error processing Region: {} for consensus calling, individual consensus aborted, with following error messages: {}",
+                    region, msg
+                )
+            }
+            TcsReportWarnings::EndJoiningErrorWithRegion(region, msg) => {
+                write!(
+                    f,
+                    "Encountered error processing Region: {} for end joining, individual end joining aborted, with following error messages: {}",
                     region, msg
                 )
             }
