@@ -88,7 +88,7 @@ impl UMIInformationBlocks {
         &self,
         error_cutoff: f32,
     ) -> Result<(UMIFamilies, UMISummary), UMIDistError> {
-        let mut umis: Vec<&str> = self.umi_information_blocks();
+        let umis: Vec<&str> = self.umi_information_blocks();
 
         if umis.len() < 5 {
             return Err(UMIDistError::TooFewRecords);
@@ -96,12 +96,10 @@ impl UMIInformationBlocks {
 
         let mut families: Vec<UMIFamily> = Vec::new();
 
-        umis.sort();
-
-        let umi_freq = umis.iter().dedup_with_count();
+        let umi_freq = umis.iter().counts();
 
         let mut freq_count: Vec<usize> = Vec::new();
-        umi_freq.clone().into_iter().for_each(|(count, _)| {
+        umi_freq.clone().into_iter().for_each(|(_, count)| {
             freq_count.push(count);
         });
 
@@ -109,23 +107,18 @@ impl UMIInformationBlocks {
             return Err(UMIDistError::TooFewUMIs);
         }
 
-        let mut freq_count_distribution: HashMap<usize, usize> = HashMap::new();
-        freq_count.iter().for_each(|&count| {
-            *freq_count_distribution.entry(count).or_insert(0) += 1;
-        });
-
-        freq_count.sort();
-        freq_count.reverse();
+        let freq_count_distribution: HashMap<usize, usize> =
+            freq_count.clone().into_iter().counts();
 
         // the latest RUBY version of TCS implementation uses the first 5 frequencies to calculate the cut-off.
         // The Rust version will be consistent with that.
         let max_freq: usize =
-            (freq_count[0..5].iter().sum::<usize>() as f64 / 5.0).round() as usize;
+            (freq_count.iter().k_largest(5).sum::<usize>() as f64 / 5.0).round() as usize;
 
         let umi_cut_off = umi_cut_off(max_freq, Some(error_cutoff));
 
         let mut umi_distribution: HashMap<String, usize> = HashMap::new();
-        umi_freq.into_iter().for_each(|(count, umi)| {
+        umi_freq.into_iter().for_each(|(umi, count)| {
             umi_distribution.insert(umi.to_string(), count);
             if count > umi_cut_off as usize {
                 let umi = UMIFamily {
@@ -234,6 +227,7 @@ pub fn umi_cut_off(m: usize, error_cutoff: Option<f32>) -> usize {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
@@ -245,5 +239,41 @@ mod tests {
         assert_eq!(umi_cut_off(10000, None), 88);
         assert_eq!(umi_cut_off(10000, Some(0.005)), 53);
         assert_eq!(umi_cut_off(10000, Some(0.001)), 30);
+    }
+
+    #[test]
+    fn test_find_umi_family_by_error_cutoff() {
+        let umi_info_block1 = "AAAAAAAAAA".to_string();
+        let umi_info_block2 = "CCCCCCCCCC".to_string();
+        let umi_info_block3 = "GGGGGGGGGG".to_string();
+        let umi_info_block4 = "TTTTTTTTTT".to_string();
+        let umi_info_block5 = "TTTTTTTAAA".to_string();
+        let umi_info_block6 = "TTTTTTTCCC".to_string();
+        let umi_info_block7 = "TTTTTTTGGG".to_string();
+        let umi_info_block8 = "AATTTTTGGG".to_string();
+        let umi_info_block9 = "AATTCTTGGG".to_string();
+        let umi_info_block10 = "AATTTGTGGG".to_string();
+        let mut umi_info_vec = vec![umi_info_block1; 1000];
+        umi_info_vec.extend(vec![umi_info_block2; 900]);
+        umi_info_vec.extend(vec![umi_info_block3; 1100]);
+        umi_info_vec.extend(vec![umi_info_block6; 15]);
+        umi_info_vec.extend(vec![umi_info_block7; 10]);
+        umi_info_vec.extend(vec![umi_info_block8; 5]);
+        umi_info_vec.extend(vec![umi_info_block9; 3]);
+        umi_info_vec.extend(vec![umi_info_block10; 2]);
+        umi_info_vec.extend(vec![umi_info_block4; 950]);
+        umi_info_vec.extend(vec![umi_info_block5; 1050]);
+
+        let umi_info_blocks = UMIInformationBlocks {
+            umi_information_blocks: umi_info_vec,
+        };
+
+        let (umi_families, umi_summary) = umi_info_blocks
+            .find_umi_family_by_error_cutoff(0.02)
+            .unwrap();
+        dbg!(&umi_families);
+        dbg!(&umi_summary);
+        assert_eq!(umi_families.families.len(), 5);
+        assert_eq!(umi_summary.umi_cut_off, 17);
     }
 }

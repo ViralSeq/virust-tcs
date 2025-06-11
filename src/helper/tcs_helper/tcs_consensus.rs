@@ -3,13 +3,14 @@ use std::error::Error;
 
 use bio::io::fastq::Record;
 use getset::{Getters, Setters};
+use itertools::Itertools;
 use rayon::{prelude::*, str};
 use serde::{Deserialize, Serialize};
 
 use crate::helper::consensus;
 use crate::helper::end_joining::EndJoiningInput;
 use crate::helper::end_joining::*;
-use crate::helper::tcs_helper::FilteredPair;
+use crate::helper::tcs_helper::*;
 use crate::helper::umis::{UMIDistError, UMIInformationBlocks, UMISummary};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Getters, Setters)]
@@ -122,6 +123,26 @@ impl TcsConsensus {
     }
 }
 
+/// Joins the R1 and R2 consensus FASTQ records into a single joined consensus record.
+/// This function takes a mutable reference to a vector of `TcsConsensus` records and performs end joining based on the specified strategy.
+/// It will mutate the original `TcsConsensus` records by setting the `joined_consensus` field with the joined record.
+/// The joining strategy is determined by the `end_joining_option` parameter.
+/// - `tcs_consensus`: A mutable reference to a vector of `TcsConsensus` records.
+/// - `end_joining_option`: An integer that determines the joining strategy:
+///   - `1`: Simple end joining.
+///   - `2`: Overlap end joining with a specified overlap length.
+///   - `3`: Unknown overlap, which is not recommended due to potential issues in libraries with many off-target reads.
+/// - `overlap_len`: The length of the overlap to use for the overlap end joining strategy.
+/// In the orginal Ruby version of TCS, we had an option of 3 for Unknown Overlap but use a consensus strategy to determine the overlap.
+/// We often have issues with this approach, particularly in libraries with many off-target reads.
+/// We decide to have either with a known overlap length or create end-joining for individual TCS consensus records.
+/// The param files generated from previous versions will still be compatible with this function. All option 3 will be converted to EndJoiningStrategy::UnknownOverlap.
+///
+/// Returns a `Result` indicating success or an error message if joining fails.
+/// This function uses parallel processing to join the consensus records efficiently.
+/// If any errors occur during the joining process, they are collected and returned as a single error message.
+/// If the joining is successful, the joined consensus record is set in the `joined_consensus` field of each `TcsConsensus` record.
+
 pub fn join_consensus_fastq_vec(
     tcs_consensus: &mut Vec<TcsConsensus>,
     end_joining_option: u32,
@@ -130,6 +151,9 @@ pub fn join_consensus_fastq_vec(
     let strategy = match end_joining_option {
         1 => EndJoiningStrategy::Simple,
         2 => EndJoiningStrategy::Overlap(overlap_len),
+        // In the orginal Ruby version of TCS, we had an option of 3 for Unknown Overlap but use a consensus strategy to determine the overlap.
+        // We often had issues with this approach, particularly in libraries with many off-target reads.
+        // We decide to have either with a known overlap length or create end-joining for individual TCS consensus records.
         _ => EndJoiningStrategy::UnknownOverlap,
     };
 
@@ -167,6 +191,25 @@ pub fn join_consensus_fastq_vec(
     if !errors.is_empty() {
         return Err(errors.join(", ").into());
     }
+
+    Ok(())
+}
+
+pub fn qc_consensus_fastq_vec(
+    tcs_consensus: &mut Vec<TcsConsensus>,
+    reference: String,
+    qc_algorithm: u8,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let mut joined_tcs_vec = Vec::new();
+    for consensus in tcs_consensus.iter() {
+        if let Some(joined) = &consensus.joined_consensus {
+            joined_tcs_vec.push(joined.seq());
+        }
+    }
+
+    let unique_joined_tcs_vec = joined_tcs_vec.into_iter().unique().collect::<Vec<_>>();
+
+    let _tcs_qc_input = TcsQcInput::with_attrs(unique_joined_tcs_vec, reference, qc_algorithm);
 
     Ok(())
 }

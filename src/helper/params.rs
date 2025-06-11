@@ -1,5 +1,6 @@
 use std::error::Error as StdError;
 use std::fmt::Display;
+use std::ops::Range;
 
 use bio::alphabets;
 use regex::Regex;
@@ -55,8 +56,12 @@ pub struct RegionParams {
 
     #[serde(deserialize_with = "string_or_number_to_u32")]
     pub ref_start: u32,
+    #[serde(default, deserialize_with = "string_or_number_to_option_u32")]
+    pub ref_start_lower: Option<u32>,
     #[serde(deserialize_with = "string_or_number_to_u32")]
     pub ref_end: u32,
+    #[serde(default, deserialize_with = "string_or_number_to_option_u32")]
+    pub ref_end_lower: Option<u32>,
     pub indel: bool,
     pub trim: bool,
     pub trim_ref: String,
@@ -98,8 +103,8 @@ pub struct ValidatedRegionParams {
     pub overlap: u32,
     pub tcs_qc: bool,
     pub ref_genome: String,
-    pub ref_start: u32,
-    pub ref_end: u32,
+    pub ref_start: Option<Range<u32>>,
+    pub ref_end: Option<Range<u32>>,
     pub indel: bool,
     pub trim: bool,
     pub trim_ref: String,
@@ -135,6 +140,10 @@ pub enum ParamsValidationError {
     InvalidEndJoinOption(u32),
     #[error("Invalid reference genome cooridinates, start {0}, end {1} not valid")]
     InvalidReferenceGenomeCoordinates(u32, u32),
+    #[error(
+        "If TCS QC is enabled, reference coordinates must be provided for at least one of the start or end. Cannot be both None(0)"
+    )]
+    TCSQCReferenceCoordinatesNotProvided,
 }
 
 impl Display for RegionParams {
@@ -215,8 +224,8 @@ impl Params {
             }
 
             let mut ref_genome = String::new();
-            let mut ref_start = 0;
-            let mut ref_end = 0;
+            let mut ref_start = None;
+            let mut ref_end = None;
             let mut trim_ref = String::new();
             let mut trim_ref_start = 0;
             let mut trim_ref_end = 0;
@@ -227,15 +236,24 @@ impl Params {
                 } else {
                     "HXB2".to_string()
                 };
-                ref_start = primer_pairs.ref_start;
-                ref_end = primer_pairs.ref_end;
-                if ref_start >= ref_end {
-                    return Err(ParamsValidationError::InvalidReferenceGenomeCoordinates(
-                        ref_start, ref_end,
-                    )
-                    .into());
+                ref_start =
+                    process_qc_ref_number(primer_pairs.ref_start, primer_pairs.ref_start_lower);
+                ref_end = process_qc_ref_number(primer_pairs.ref_end, primer_pairs.ref_end_lower);
+
+                match (ref_start.as_ref(), ref_end.as_ref()) {
+                    (Some(start), Some(end)) if start.end >= end.start => {
+                        return Err(ParamsValidationError::InvalidReferenceGenomeCoordinates(
+                            start.end, end.start,
+                        )
+                        .into());
+                    }
+                    (None, None) => {
+                        return Err(
+                            ParamsValidationError::TCSQCReferenceCoordinatesNotProvided.into()
+                        );
+                    }
+                    _ => {}
                 }
-            } else {
             }
 
             if primer_pairs.trim {
@@ -304,6 +322,56 @@ where
         }
         _ => Ok(0),
     }
+}
+
+fn string_or_number_to_option_u32<'de, D>(deserializer: D) -> Result<Option<u32>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::{self, Unexpected, Visitor};
+    use std::fmt;
+
+    struct StringOrNumberVisitor;
+
+    impl<'de> Visitor<'de> for StringOrNumberVisitor {
+        type Value = Option<u32>;
+
+        fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+            formatter.write_str("an integer, a string representing an integer, or nothing")
+        }
+
+        fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(Some(value as u32))
+        }
+
+        fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            value.parse().map(Some).map_err(|_| {
+                de::Error::invalid_value(Unexpected::Str(value), &"a string representing a u32")
+            })
+        }
+
+        fn visit_none<E>(self) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(None)
+        }
+
+        fn visit_unit<E>(self) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(None)
+        }
+    }
+
+    deserializer.deserialize_option(StringOrNumberVisitor)
 }
 
 fn string_or_number_to_f32<'de, D>(deserializer: D) -> Result<f32, D::Error>
@@ -385,6 +453,17 @@ pub fn validate_forward_primer(seq: &str) -> Result<ForwardMatching, Box<dyn Std
         leading_n_number,
         bio_forward,
     })
+}
+
+fn process_qc_ref_number(n1: u32, n2: Option<u32>) -> Option<Range<u32>> {
+    if n1 == 0 {
+        return None;
+    }
+    if let Some(n2) = n2 {
+        if n1 < n2 { Some(n1..n2) } else { None }
+    } else {
+        Some(n1..n1 + 1)
+    }
 }
 
 #[cfg(test)]

@@ -125,10 +125,10 @@ pub fn exec() {
             _ => false,
         };
 
-        let (ref_genome, ref_start, ref_end) = if tcs_qc {
+        let (ref_genome, ref_start, ref_start_lower, ref_end, ref_end_lower) = if tcs_qc {
             get_ref_and_locations()
         } else {
-            (String::new(), 0, 0)
+            (String::new(), 0, None, 0, None)
         };
 
         let indel = if tcs_qc {
@@ -147,10 +147,10 @@ pub fn exec() {
             _ => false,
         };
 
-        let (trim_ref, trim_ref_start, trim_ref_end) = if trim {
+        let (trim_ref, trim_ref_start, _, trim_ref_end, _) = if trim {
             get_ref_and_locations()
         } else {
-            (String::new(), 0, 0)
+            (String::new(), 0, None, 0, None)
         };
 
         regions.push(RegionParams {
@@ -164,7 +164,9 @@ pub fn exec() {
             tcs_qc,
             ref_genome,
             ref_start,
+            ref_start_lower,
             ref_end,
+            ref_end_lower,
             indel,
             trim,
             trim_ref,
@@ -286,19 +288,37 @@ fn get_ref() -> String {
     }
 }
 
-fn get_ref_and_locations() -> (String, u32, u32) {
+fn get_ref_and_locations() -> (String, u32, Option<u32>, u32, Option<u32>) {
     let ref_genome = get_ref();
 
-    print!("reference 5'end ref position or position range, 0 if no need to match this end \n>  ");
+    print!("reference 5'end ref position range starts, 0 if no need to match this end \n>  ");
     let ref_start = match collect_input().as_str() {
         "" => 0,
         input => input.parse::<u32>().unwrap_or(0),
     };
 
-    print!("reference 3'end ref position or position range: 0 if no need to match this end \n>  ");
+    print!("reference 5'end ref position range ends, 0 if no need to match this end \n>  ");
+    let ref_start_lower = match collect_input().as_str() {
+        "" => 0,
+        input => input.parse::<u32>().unwrap_or(0),
+    };
+
+    print!("reference 3'end ref position range starts: 0 if no need to match this end \n>  ");
     let ref_end = match collect_input().as_str() {
         "" => 0,
         input => input.parse::<u32>().unwrap_or(0),
     };
-    (ref_genome, ref_start, ref_end)
+
+    print!("reference 3'end ref position range ends: 0 if no need to match this end \n>  ");
+    let ref_end_lower = match collect_input().as_str() {
+        "" => 0,
+        input => input.parse::<u32>().unwrap_or(0),
+    };
+    (
+        ref_genome,
+        ref_start,
+        Some(ref_start_lower),
+        ref_end,
+        Some(ref_end_lower),
+    )
 }

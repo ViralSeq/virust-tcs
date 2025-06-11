@@ -9,11 +9,7 @@ use rayon::prelude::*;
 use crate::helper::consensus::*;
 use crate::helper::io::read_fastq_file;
 use crate::helper::params::Params;
-use crate::helper::tcs_helper::log_line;
-use crate::helper::tcs_helper::{
-    AdvancedSettings, FilteredPair, PairedRecordFilterResult, RegionReport, TcsConsensus, TcsError,
-    TcsReport, TcsReportWarnings, filter_r1_r2_pairs, join_consensus_fastq_vec, validate_files,
-};
+use crate::helper::tcs_helper::*;
 
 pub fn tcs(
     input: &str,

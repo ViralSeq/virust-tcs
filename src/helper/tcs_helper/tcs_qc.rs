@@ -1,0 +1,108 @@
+use getset::{Getters, Setters};
+use virust_locator::config::Args as LocatorArgs;
+use virust_locator::locator::Locator;
+
+#[derive(Debug, Clone, Getters, Setters)]
+pub struct TcsQcInput {
+    #[getset(get = "pub", set = "pub")]
+    query: Vec<String>,
+    #[getset(get = "pub", set = "pub")]
+    reference: QcReference,
+    #[getset(get = "pub", set = "pub")]
+    algorithm: QcAlgorithm,
+    //TODO: location parameters
+}
+
+impl TcsQcInput {
+    pub fn with_attrs(query: Vec<&[u8]>, reference: String, algorithm_code: u8) -> Option<Self> {
+        let reference = QcReference::from_string(&reference).unwrap_or_default();
+        let algorithm = QcAlgorithm::from_option_code(algorithm_code).unwrap_or_default();
+        if query.is_empty() {
+            return None;
+        }
+        let query = query
+            .into_iter()
+            .map(|q| String::from_utf8_lossy(q).to_string())
+            .collect();
+        Some(TcsQcInput {
+            query,
+            reference,
+            algorithm,
+        })
+    }
+
+    pub fn to_locator_args(&self) -> LocatorArgs {
+        LocatorArgs {
+            query: self.query.clone(),
+            reference: self.reference.to_string(),
+            type_query: "nt".to_string(),
+            algorithm: self.algorithm.to_option_code(),
+        }
+    }
+
+    //TODO: Implement the actual locator run logic
+    pub fn run_locator(&self) -> Result<Vec<Locator>, Box<dyn std::error::Error + Send + Sync>> {
+        let args = self.to_locator_args();
+        let _locator = Locator::build(&args)?;
+        todo!("Run locator with args: {:?}", args);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum QcAlgorithm {
+    SemiGlobal,
+    PatternMatching,
+}
+impl Default for QcAlgorithm {
+    fn default() -> Self {
+        QcAlgorithm::SemiGlobal
+    }
+}
+
+impl QcAlgorithm {
+    pub fn to_option_code(&self) -> u8 {
+        match self {
+            QcAlgorithm::SemiGlobal => 1,
+            QcAlgorithm::PatternMatching => 2,
+        }
+    }
+
+    pub fn from_option_code(code: u8) -> Option<Self> {
+        match code {
+            1 => Some(QcAlgorithm::SemiGlobal),
+            2 => Some(QcAlgorithm::PatternMatching),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum QcReference {
+    HXB2,
+    SIVmm239,
+}
+
+impl Default for QcReference {
+    fn default() -> Self {
+        QcReference::HXB2
+    }
+}
+
+impl QcReference {
+    pub fn to_string(&self) -> String {
+        match self {
+            QcReference::HXB2 => "HXB2".to_string(),
+            QcReference::SIVmm239 => "SIVmm239".to_string(),
+        }
+    }
+
+    pub fn from_string(reference: &str) -> Option<Self> {
+        match reference {
+            "HXB2" => Some(QcReference::HXB2),
+            "SIVmm239" => Some(QcReference::SIVmm239),
+            _ => None,
+        }
+    }
+}
+
+// TODO: struct for TcsQcResult
