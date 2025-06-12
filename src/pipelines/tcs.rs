@@ -329,9 +329,11 @@ pub fn tcs_main(
                 consensus_strategy,
                 params.platform_error_rate,
             ) {
-                Ok((consensus_results, errors, umi_summary)) => {
-                    (consensus_results, errors, umi_summary)
-                }
+                Ok(tcs_consensus_building_output) => (
+                    tcs_consensus_building_output.tcs_consensus().clone(),
+                    tcs_consensus_building_output.errors().clone(),
+                    tcs_consensus_building_output.umi_summary().clone(),
+                ),
                 Err(e) => {
                     log_line(
                         logger,

@@ -1151,9 +1151,9 @@ dependencies = [
 
 [[package]]
 name = "virust-locator"
-version = "0.1.3"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6675f680d71181d8da5ccb19d8fd7c01c409803dfe4bc1fba9c55ad7334e718c"
+checksum = "1a5389db7156a1c938e00bf22e952b92202c7bb9f73ce0953f7112551119f5c4"
 dependencies = [
  "bio",
  "clap",

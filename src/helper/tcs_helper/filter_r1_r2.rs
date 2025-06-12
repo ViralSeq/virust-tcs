@@ -584,8 +584,8 @@ mod tests {
             indel: false,
             trim: false,
             trim_ref: "HXB2".to_string(),
-            trim_ref_start: 0,
-            trim_ref_end: 0,
+            trim_ref_start: None,
+            trim_ref_end: None,
         };
 
         let validated_params = ValidatedParams {

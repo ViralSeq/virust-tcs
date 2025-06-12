@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::error::Error;
+
 use getset::{Getters, Setters};
 use virust_locator::config::Args as LocatorArgs;
 use virust_locator::locator::Locator;
@@ -10,7 +13,6 @@ pub struct TcsQcInput {
     reference: QcReference,
     #[getset(get = "pub", set = "pub")]
     algorithm: QcAlgorithm,
-    //TODO: location parameters
 }
 
 impl TcsQcInput {
@@ -41,10 +43,18 @@ impl TcsQcInput {
     }
 
     //TODO: Implement the actual locator run logic
-    pub fn run_locator(&self) -> Result<Vec<Locator>, Box<dyn std::error::Error + Send + Sync>> {
+    pub fn run_locator(&self) -> Result<TcsQcOutput, Box<dyn Error + Send + Sync>> {
         let args = self.to_locator_args();
-        let _locator = Locator::build(&args)?;
-        todo!("Run locator with args: {:?}", args);
+        let locator = Locator::build(&args)?;
+        let mut query_locator_hashmap: HashMap<&[u8], Option<Locator>> = HashMap::new();
+        for i in 0..self.query().len() {
+            let query = self.query()[i].as_bytes();
+            query_locator_hashmap.insert(query, locator[i].clone());
+        }
+        let tcs_qc_output = TcsQcOutput {
+            results_map: query_locator_hashmap,
+        };
+        Ok(tcs_qc_output)
     }
 }
 
@@ -105,4 +115,8 @@ impl QcReference {
     }
 }
 
-// TODO: struct for TcsQcResult
+#[derive(Debug, Clone, Getters, Setters)]
+pub struct TcsQcOutput<'a> {
+    #[getset(get = "pub")]
+    results_map: HashMap<&'a [u8], Option<Locator>>,
+}

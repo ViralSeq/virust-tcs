@@ -108,8 +108,8 @@ pub struct ValidatedRegionParams {
     pub indel: bool,
     pub trim: bool,
     pub trim_ref: String,
-    pub trim_ref_start: u32,
-    pub trim_ref_end: u32,
+    pub trim_ref_start: Option<u32>,
+    pub trim_ref_end: Option<u32>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -227,8 +227,8 @@ impl Params {
             let mut ref_start = None;
             let mut ref_end = None;
             let mut trim_ref = String::new();
-            let mut trim_ref_start = 0;
-            let mut trim_ref_end = 0;
+            let mut trim_ref_start = None;
+            let mut trim_ref_end = None;
 
             if primer_pairs.tcs_qc {
                 ref_genome = if ["HXB2", "SIVmm239"].contains(&primer_pairs.ref_genome.as_str()) {
@@ -263,12 +263,12 @@ impl Params {
                     "HXB2".to_string()
                 };
 
-                trim_ref_start = primer_pairs.trim_ref_start;
-                trim_ref_end = primer_pairs.trim_ref_end;
-                if trim_ref_start >= trim_ref_end {
+                trim_ref_start = Some(primer_pairs.trim_ref_start);
+                trim_ref_end = Some(primer_pairs.trim_ref_end);
+                if primer_pairs.trim_ref_start >= primer_pairs.trim_ref_end {
                     return Err(ParamsValidationError::InvalidReferenceGenomeCoordinates(
-                        trim_ref_start,
-                        trim_ref_end,
+                        primer_pairs.trim_ref_start,
+                        primer_pairs.trim_ref_end,
                     )
                     .into());
                 }

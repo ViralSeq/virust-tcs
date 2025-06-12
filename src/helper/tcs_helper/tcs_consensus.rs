@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::error::Error;
+use std::fmt::Display;
+use std::ops::Range;
 
 use bio::io::fastq::Record;
 use getset::{Getters, Setters};
@@ -26,12 +28,67 @@ pub struct TcsConsensus {
     #[getset(get = "pub", set = "pub")]
     joined_consensus: Option<Record>,
     #[getset(get = "pub", set = "pub")]
-    qc: Option<bool>,
+    qc: TcsConsensusQcResult,
     #[getset(get = "pub", set = "pub")]
     trimmed: Option<Record>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub enum TcsConsensusQcResult {
+    #[default]
+    QcNotInitialized,
+    NoJoinedConsensus,
+    NotRequired,
+    Passed,
+    NotPassed(QcNotPassedReport),
+    LocatorWithErrors(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QcNotPassedReport {
+    qc_reference: String,
+    qc_coordinates1: Option<Range<u32>>,
+    qc_coordinates2: Option<Range<u32>>,
+    locator_coordinates: Option<Range<u32>>,
+}
+
+impl Display for QcNotPassedReport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "QC not passed for reference: {}, coordinates1: {:?}, coordinates2: {:?}, locator_coordinates: {:?}",
+            self.qc_reference, self.qc_coordinates1, self.qc_coordinates2, self.locator_coordinates
+        )
+    }
+}
+
+impl Display for TcsConsensusQcResult {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TcsConsensusQcResult::QcNotInitialized => write!(f, "QC not initialized"),
+            TcsConsensusQcResult::NoJoinedConsensus => write!(f, "No joined consensus available"),
+            TcsConsensusQcResult::NotRequired => write!(f, "QC not required"),
+            TcsConsensusQcResult::Passed => write!(f, "QC passed"),
+            TcsConsensusQcResult::NotPassed(report) => write!(f, "{}", report),
+            TcsConsensusQcResult::LocatorWithErrors(errors) => {
+                write!(f, "Locator errors: {}", errors)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Getters, Setters)]
+pub struct TcsConsensusBuildingOutput {
+    #[getset(get = "pub")]
+    tcs_consensus: Vec<TcsConsensus>,
+    #[getset(get = "pub")]
+    errors: Vec<String>,
+    #[getset(get = "pub")]
+    umi_summary: UMISummary,
+}
+
 impl TcsConsensus {
+    /// Initializes a new `TcsConsensus` instance with empty fields.
     pub fn new() -> Self {
         TcsConsensus {
             umi_information_block: String::new(),
@@ -39,7 +96,7 @@ impl TcsConsensus {
             r1_consensus: Record::new(),
             r2_consensus: Record::new(),
             joined_consensus: None,
-            qc: None,
+            qc: TcsConsensusQcResult::default(),
             trimmed: None,
         }
     }
@@ -48,7 +105,7 @@ impl TcsConsensus {
         pairs: &Vec<FilteredPair>,
         strategy: consensus::ConsensusStrategy,
         error_cutoff: f32,
-    ) -> Result<(Vec<Self>, Vec<String>, UMISummary), UMIDistError> {
+    ) -> Result<TcsConsensusBuildingOutput, UMIDistError> {
         let mut umi_records = HashMap::new();
 
         for pair in pairs {
@@ -119,7 +176,11 @@ impl TcsConsensus {
                 Err(e) => errors.push(e.to_string()),
             }
         }
-        Ok((tcs_consensus, errors, umi_summary))
+        Ok(TcsConsensusBuildingOutput {
+            tcs_consensus,
+            errors,
+            umi_summary,
+        })
     }
 }
 
@@ -142,7 +203,6 @@ impl TcsConsensus {
 /// This function uses parallel processing to join the consensus records efficiently.
 /// If any errors occur during the joining process, they are collected and returned as a single error message.
 /// If the joining is successful, the joined consensus record is set in the `joined_consensus` field of each `TcsConsensus` record.
-
 pub fn join_consensus_fastq_vec(
     tcs_consensus: &mut Vec<TcsConsensus>,
     end_joining_option: u32,
@@ -195,10 +255,14 @@ pub fn join_consensus_fastq_vec(
     Ok(())
 }
 
-pub fn qc_consensus_fastq_vec(
+pub fn qc_and_trim_consensus_fastq_vec(
     tcs_consensus: &mut Vec<TcsConsensus>,
     reference: String,
     qc_algorithm: u8,
+    qc_upstream: Option<Range<u32>>,
+    qc_downstream: Option<Range<u32>>,
+    trim_upstream: Option<Range<u32>>,
+    trim_downstream: Option<Range<u32>>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     let mut joined_tcs_vec = Vec::new();
     for consensus in tcs_consensus.iter() {
@@ -209,7 +273,46 @@ pub fn qc_consensus_fastq_vec(
 
     let unique_joined_tcs_vec = joined_tcs_vec.into_iter().unique().collect::<Vec<_>>();
 
-    let _tcs_qc_input = TcsQcInput::with_attrs(unique_joined_tcs_vec, reference, qc_algorithm);
+    let tcs_qc_input = TcsQcInput::with_attrs(unique_joined_tcs_vec, reference, qc_algorithm)
+        .ok_or("Failed to create TcsQcInput")?;
+
+    let qc_output = tcs_qc_input.run_locator()?.results_map().to_owned();
+
+    for censensus in tcs_consensus.iter_mut() {
+        if let Some(joined) = &censensus.joined_consensus {
+            let joined_seq = joined.seq();
+            match qc_output.get(joined_seq) {
+                Some(Some(locator)) => {
+                    // TODO: Implement the actual locator run logic
+                    todo!(
+                        "locator {:?} with params: {}, {}, {}, {}, {},",
+                        locator,
+                        qc_algorithm,
+                        qc_upstream.is_some(),
+                        qc_downstream.is_some(),
+                        trim_upstream.is_some(),
+                        trim_downstream.is_some(),
+                    );
+                }
+                Some(None) => {
+                    censensus.set_qc(TcsConsensusQcResult::LocatorWithErrors(
+                        "Locator returned None".to_string(),
+                    ));
+                    censensus.set_trimmed(None);
+                }
+                None => {
+                    censensus.set_qc(TcsConsensusQcResult::LocatorWithErrors(format!(
+                        "No locator found for sequence: {}",
+                        String::from_utf8_lossy(joined_seq)
+                    )));
+                    censensus.set_trimmed(None);
+                }
+            }
+        } else {
+            censensus.set_qc(TcsConsensusQcResult::NoJoinedConsensus);
+            censensus.set_trimmed(None);
+        }
+    }
 
     Ok(())
 }
