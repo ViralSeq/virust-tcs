@@ -344,6 +344,12 @@ impl Params {
             primer_pairs: validated_primer_pairs,
         })
     }
+
+    pub fn from_preset(present_name: &str) -> Self {
+        let mut params = Params::new();
+        params.email = Some(present_name.to_string());
+        params
+    }
 }
 
 fn string_or_number_to_u32<'de, D>(deserializer: D) -> Result<u32, D::Error>

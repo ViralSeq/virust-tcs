@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::{self, File, OpenOptions};
-use std::io::BufWriter;
+use std::io::{BufWriter, Result as IoResult, Write};
 use std::path::{Path, PathBuf};
 
 use rayon::prelude::*;
@@ -11,9 +11,15 @@ use crate::helper::io::read_fastq_file;
 use crate::helper::params::Params;
 use crate::helper::tcs_helper::*;
 
+#[derive(Debug, Clone)]
+pub enum ParamsInputType {
+    PresetID(String), // Preset parameter set ID only
+    FromFilePath(String),
+}
+
 pub fn tcs(
     input: &str,
-    param: &str,
+    param: ParamsInputType,
     keep_original: bool,
     steepness: f32,
     midpoint: u8,
@@ -22,7 +28,7 @@ pub fn tcs(
     // this will create a new TCS report and a logger that will log the progress of the TCS pipeline.
     // the logger will log to a file named run_log.txt in the input directory.
     // the TCS report will be used to store the results of the TCS pipeline.
-    let (mut tcs_report, mut logger) = tcs_init(input)?;
+    let (mut tcs_report, mut logger, mut report_logger) = tcs_init(input)?;
 
     let advanced_settings = AdvancedSettings::from_attr(keep_original, steepness, midpoint);
     tcs_report.set_advanced_settings(advanced_settings);
@@ -49,10 +55,10 @@ pub fn tcs(
 
     let success = tcs_report.is_successful();
 
-    dbg!(tcs_report.is_successful());
-
     // TODO: write the TCS report to a file
-    // tcs_write(&tcs_report, &mut logger)?;
+
+    log_line(&mut logger, "Writing TCS report to file")?;
+    tcs_write(&tcs_report, &mut report_logger)?;
 
     if keep_original {
         log_line(&mut logger, "Keeping original files")?;
@@ -80,7 +86,7 @@ pub fn tcs(
 pub fn tcs_main(
     mut tcs_report: TcsReport,
     logger: &mut BufWriter<File>,
-    param: &str,
+    param: ParamsInputType,
     advanced_settings: AdvancedSettings,
 ) -> Result<(TcsReport, Option<(PathBuf, PathBuf)>), Box<dyn Error>> {
     let keep_original = *advanced_settings.keep_original();
@@ -93,7 +99,7 @@ pub fn tcs_main(
         &format!("TCS (Rust) Version: {}", env!("CARGO_PKG_VERSION")),
     )?;
     log_line(logger, &format!("Input directory: {}", input))?;
-    log_line(logger, &format!("Param file input: {}", param))?;
+    log_line(logger, &format!("Params type: {:?}", param))?;
     log_line(logger, &format!("Keep original: {}", keep_original))?;
     log_line(logger, &format!("Steepness: {}", steepness))?;
     log_line(logger, &format!("Midpoint: {}", midpoint))?;
@@ -128,14 +134,31 @@ pub fn tcs_main(
     // The Params struct will contain the parameters for the TCS pipeline.
     // If there is an error reading the param file, it will log the error to the logger and return a TcsReport with the error.
     // The TcsReport with error will be handled in the downstream processing.
-    log_line(logger, "Reading Param file")?;
 
-    let params: Params = match Params::from_json_sting(&fs::read_to_string(param)?) {
-        Ok(params) => params,
-        Err(e) => {
-            log_line(logger, &format!("Error reading param file: {}", e))?;
-            tcs_report.add_error(e.to_string());
-            return Ok((tcs_report, Some((r1_file.clone(), r2_file.clone()))));
+    let params = match param {
+        ParamsInputType::PresetID(preset) => {
+            log_line(logger, &format!("Using preset parameters: {}", preset))?;
+            // Load the preset parameters from the Params struct
+            let p = Params::from_preset(&preset);
+            tcs_report.set_input_params(p.clone());
+            p
+        }
+        ParamsInputType::FromFilePath(file_path) => {
+            log_line(
+                logger,
+                &format!("Reading parameters from file: {}", file_path),
+            )?;
+            match Params::from_json_sting(&fs::read_to_string(file_path)?) {
+                Ok(p) => {
+                    tcs_report.set_input_params(p.clone());
+                    p
+                }
+                Err(e) => {
+                    log_line(logger, &format!("Error reading param file: {}", e))?;
+                    tcs_report.add_error(e.to_string());
+                    return Ok((tcs_report, Some((r1_file.clone(), r2_file.clone()))));
+                }
+            }
         }
     };
 
@@ -327,7 +350,7 @@ pub fn tcs_main(
         // The UMI summary will be collected and added to the RegionReport as part of the TcsReport.
 
         let (mut consensus_results, consensus_errors, umi_summary) =
-            match TcsConsensus::build_from_filtered_pairs(
+            match tcs_consensus::build_from_filtered_pairs(
                 filtered_pairs,
                 consensus_strategy,
                 params.platform_error_rate,
@@ -469,6 +492,8 @@ pub fn tcs_main(
                         count_passed(&consensus_results)
                     ),
                 )?;
+                region_report.set_tcs_consensus_results(Some(consensus_results));
+                region_reports.push(region_report);
             }
         } else {
             log_line(
@@ -484,11 +509,13 @@ pub fn tcs_main(
         }
     }
 
+    tcs_report.set_region_reports(region_reports);
+
     // TODO: downstream processing
     // 1. consensus calling for each region. DONE!
     // 2. end-joining of consensus sequences. DONE!
-    // 3. qc
-    // 4. trimming
+    // 3. qc DONE!
+    // 4. trimming DONE!
     // 5. write fastq and fasta files.
     // 6. write UMI files in JSON format.
     // 7. export a summary report.
@@ -498,18 +525,18 @@ pub fn tcs_main(
 }
 
 //TODO: write details of the function
-pub fn tcs_write(
-    tcs_report: &TcsReport,
-    logger: &mut BufWriter<File>,
-) -> Result<(), Box<dyn Error>> {
-    todo!(
-        "TCS write function called, but not implemented yet. This function should write the TCS report to a file. with the following details: {:?} and logger: {:?}",
-        tcs_report,
-        logger
-    )
+pub fn tcs_write(tcs_report: &TcsReport, report_logger: &mut BufWriter<File>) -> IoResult<()> {
+    writeln!(
+        report_logger,
+        "{}",
+        serde_json::to_string_pretty(tcs_report)?
+    )?;
+    report_logger.flush()?;
+
+    Ok(())
 }
 
-fn tcs_init(input: &str) -> Result<(TcsReport, BufWriter<File>), Box<dyn Error>> {
+fn tcs_init(input: &str) -> Result<(TcsReport, BufWriter<File>, BufWriter<File>), Box<dyn Error>> {
     // Initialize the TCS report
     let mut tcs_report = TcsReport::new();
 
@@ -532,7 +559,15 @@ fn tcs_init(input: &str) -> Result<(TcsReport, BufWriter<File>), Box<dyn Error>>
 
     let logger: BufWriter<File> = BufWriter::new(logfile);
 
-    Ok((tcs_report, logger))
+    let report_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(input_dir.join("tcs_report.json"))?;
+
+    let report_file = BufWriter::new(report_file);
+
+    Ok((tcs_report, logger, report_file))
 }
 
 // MARK: tcs_dr main function

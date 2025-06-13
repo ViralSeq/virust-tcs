@@ -1,0 +1,24 @@
+{
+  "platform_error_rate": 0.01,
+  "platform_format": 300,
+  "primer_pairs": [
+    {
+      "region": "PR",
+      "cdna": "GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCTNNNNNNNNNCAGTTTAACTTTTGGGCCATCCATTCC",
+      "forward": "GCCTCCCTCGCGCCATCAGAGATGTGTATAAGAGACAGNNNNTCAGAGCAGACCAGAGCCAACAGCCCCA",
+      "majority": 0,
+      "end_join": true,
+      "end_join_option": 3,
+      "TCS_QC": true,
+      "ref_genome": "HXB2",
+      "ref_start": 2160,
+      "ref_start_lower": 2170,
+      "ref_end": 2591,
+      "indel": true,
+      "trim": true,
+      "trim_ref": "HXB2",
+      "trim_ref_start": 2253,
+      "trim_ref_end": 2549
+    }
+  ]
+}

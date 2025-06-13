@@ -2,7 +2,7 @@ use clap::Parser;
 use virust_tcs::cli::Args;
 use virust_tcs::cli::Commands;
 use virust_tcs::pipelines::params_generator;
-use virust_tcs::pipelines::tcs;
+use virust_tcs::pipelines::tcs::*;
 
 fn main() {
     let args = Args::parse();
@@ -15,7 +15,15 @@ fn main() {
             steepness,
             midpoint,
         } => {
-            tcs::tcs(&input, &param, keep_original, steepness, midpoint).unwrap_or_else(|err| {
+            let params_input_type = ParamsInputType::FromFilePath(param.clone());
+            tcs(
+                &input,
+                params_input_type,
+                keep_original,
+                steepness,
+                midpoint,
+            )
+            .unwrap_or_else(|err| {
                 eprintln!("Fatal Error: {} occurred during processing", err);
                 std::process::exit(1);
             });

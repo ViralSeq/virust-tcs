@@ -33,6 +33,8 @@ pub enum TcsError {
         "Invalid read length: Platform Format: {0}, should be equal or less to Read 1 Length: {1} and Read 2: {2}"
     )]
     InvalidReadLength(usize, usize, usize),
+    #[error("Failed to access the param file from the given path: {0}")]
+    ParamFileAccessError(String),
     #[error("Unexpected error: {0}")]
     UnexpectedError(String),
 }

@@ -4,13 +4,14 @@ use bio::io::fasta;
 use bio::io::fastq;
 use getset::{Getters, Setters};
 
-const MIN_OVERLAP: usize = 10; // minimum overlap length, can be adjusted
-const ERROR_RATE_FOR_ENDJOINING: f64 = 0.02; // allowed error rate, can be adjusted
+pub const MIN_OVERLAP: usize = 10; // minimum overlap length, can be adjusted
+pub const ERROR_RATE_FOR_ENDJOINING: f64 = 0.02; // allowed error rate, can be adjusted
 
 /// Strategy for joining two ends of sequences.
 /// This enum defines how the end joining should be performed based on the overlap information.
 /// - `Simple`: No overlap check, just concatenate the sequences.
-/// - `Overlap(usize)`: Join with a known overlap length.
+/// - `SimpleOverlap(usize)`: Join with a known overlap length as integer.
+/// - `Overlap(OverlapResult)`: Join with a full overlap pattern with an `OverlapResult`.
 /// - `UnknownOverlap`: Attempt to find the best overlap automatically.
 /// The `Overlap` variant allows specifying a fixed overlap length, while `UnknownOverlap` will
 /// try to determine the best overlap based on the sequences provided.
@@ -22,8 +23,10 @@ const ERROR_RATE_FOR_ENDJOINING: f64 = 0.02; // allowed error rate, can be adjus
 pub enum EndJoiningStrategy {
     // simple joining, no overlap check
     Simple,
-    // joining with known overlap,
-    Overlap(usize),
+    // joining with known simple overlap length,
+    SimpleOverlap(usize),
+    // joining with full overlap pattern.
+    Overlap(OverlapResult),
     // unknown overlap, will try to find the best overlap
     UnknownOverlap,
 }
@@ -228,9 +231,13 @@ pub fn end_joining(
             // this is equivalent to zero overlap.
             OverlapResult::from_simple_overlap(r1.len(), r2.len(), 0)
         }
-        EndJoiningStrategy::Overlap(overlap_len) => {
+        EndJoiningStrategy::SimpleOverlap(overlap_len) => {
             // use the provided overlap length
             OverlapResult::from_simple_overlap(r1.len(), r2.len(), *overlap_len)
+        }
+        EndJoiningStrategy::Overlap(overlap_result) => {
+            // use the provided overlap result
+            overlap_result.clone()
         }
         EndJoiningStrategy::UnknownOverlap => {
             // find the best overlap
@@ -481,11 +488,11 @@ mod tests {
         assert_eq!(overlap_result.overlap_len, 10);
         let result = end_joining(
             input.clone(),
-            &EndJoiningStrategy::Overlap(overlap.overlap_len),
+            &EndJoiningStrategy::SimpleOverlap(overlap.overlap_len),
         )
         .unwrap();
         assert_eq!(result.seq, b"ACGTACGTTACGTCGA");
-        let result = end_joining(input.clone(), &EndJoiningStrategy::Overlap(0)).unwrap();
+        let result = end_joining(input.clone(), &EndJoiningStrategy::SimpleOverlap(0)).unwrap();
         assert_eq!(result.seq, b"ACGTACGTTACGTTACGTTACGTCGA");
     }
 
