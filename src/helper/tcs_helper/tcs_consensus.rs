@@ -6,12 +6,14 @@ use std::ops::Range;
 use bio::io::fastq::Record;
 use getset::{Getters, Setters};
 use itertools::Itertools;
-use rayon::{prelude::*, str};
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
+use virust_locator::prelude::*;
 
 use crate::helper::consensus;
 use crate::helper::end_joining::EndJoiningInput;
 use crate::helper::end_joining::*;
+use crate::helper::params::{QcConfig, TrimConfig};
 use crate::helper::tcs_helper::*;
 use crate::helper::umis::{UMIDistError, UMIInformationBlocks, UMISummary};
 
@@ -33,7 +35,7 @@ pub struct TcsConsensus {
     trimmed: Option<Record>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub enum TcsConsensusQcResult {
     #[default]
     QcNotInitialized,
@@ -44,20 +46,33 @@ pub enum TcsConsensusQcResult {
     LocatorWithErrors(String),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Getters, Setters)]
 pub struct QcNotPassedReport {
+    #[getset(get = "pub")]
     qc_reference: String,
+    #[getset(get = "pub")]
     qc_coordinates1: Option<Range<u32>>,
+    #[getset(get = "pub")]
     qc_coordinates2: Option<Range<u32>>,
+    #[getset(get = "pub")]
+    qc_indels: bool,
+    #[getset(get = "pub")]
     locator_coordinates: Option<Range<u32>>,
+    #[getset(get = "pub")]
+    locator_indels: bool,
 }
 
 impl Display for QcNotPassedReport {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "QC not passed for reference: {}, coordinates1: {:?}, coordinates2: {:?}, locator_coordinates: {:?}",
-            self.qc_reference, self.qc_coordinates1, self.qc_coordinates2, self.locator_coordinates
+            "QC not passed for reference: {}, coordinates1: {:?}, coordinates2: {:?}, indels: {}, locator_coordinates: {:?}, indels: {}",
+            self.qc_reference,
+            self.qc_coordinates1,
+            self.qc_coordinates2,
+            self.qc_indels,
+            self.locator_coordinates,
+            self.locator_indels,
         )
     }
 }
@@ -107,9 +122,10 @@ impl TcsConsensus {
         error_cutoff: f32,
     ) -> Result<TcsConsensusBuildingOutput, UMIDistError> {
         let mut umi_records = HashMap::new();
-
+        let mut umi_information_blocks = Vec::new();
         for pair in pairs {
             let umi_information_block = pair.umi.umi_information_block.clone();
+            umi_information_blocks.push(umi_information_block.clone());
             umi_records
                 .entry(umi_information_block)
                 .or_insert_with(|| Vec::new())
@@ -117,7 +133,7 @@ impl TcsConsensus {
         }
 
         let umis = UMIInformationBlocks {
-            umi_information_blocks: umi_records.keys().cloned().collect::<Vec<_>>(),
+            umi_information_blocks,
         };
 
         let (umi_families, umi_summary) = umis.find_umi_family_by_error_cutoff(error_cutoff)?;
@@ -145,13 +161,13 @@ impl TcsConsensus {
                         consensus::consensus(strategy, consensus::ConsensusInput::Fastq(&r2_vec))?;
 
                     let r1_consensus_record = Record::with_attrs(
-                        &format!("{}-{}-r1", umi_information_block, umi_family.frequency),
+                        &format!("{}_{}_r1", umi_information_block, umi_family.frequency),
                         None,
                         &r1_consensus.seq,
                         &r1_consensus.qual.unwrap(),
                     );
                     let r2_consensus_record = Record::with_attrs(
-                        &format!("{}-{}-r2", umi_information_block, umi_family.frequency),
+                        &format!("{}_{}_r2", umi_information_block, umi_family.frequency),
                         None,
                         &r2_consensus.seq,
                         &r2_consensus.qual.unwrap(),
@@ -255,15 +271,18 @@ pub fn join_consensus_fastq_vec(
     Ok(())
 }
 
+const QC_ALGORITHM: QcAlgorithm = QcAlgorithm::SemiGlobal;
+
 pub fn qc_and_trim_consensus_fastq_vec(
     tcs_consensus: &mut Vec<TcsConsensus>,
-    reference: String,
-    qc_algorithm: u8,
-    qc_upstream: Option<Range<u32>>,
-    qc_downstream: Option<Range<u32>>,
-    trim_upstream: Option<Range<u32>>,
-    trim_downstream: Option<Range<u32>>,
+    qc_config: Option<&QcConfig>,
+    trim_config: Option<&TrimConfig>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
+    if qc_config.is_none() {
+        return Ok(());
+    }
+    let qc_config = qc_config.unwrap();
+
     let mut joined_tcs_vec = Vec::new();
     for consensus in tcs_consensus.iter() {
         if let Some(joined) = &consensus.joined_consensus {
@@ -273,46 +292,219 @@ pub fn qc_and_trim_consensus_fastq_vec(
 
     let unique_joined_tcs_vec = joined_tcs_vec.into_iter().unique().collect::<Vec<_>>();
 
-    let tcs_qc_input = TcsQcInput::with_attrs(unique_joined_tcs_vec, reference, qc_algorithm)
-        .ok_or("Failed to create TcsQcInput")?;
+    let tcs_qc_input = TcsQcInput::with_attrs(
+        unique_joined_tcs_vec,
+        qc_config.reference.clone(),
+        QC_ALGORITHM,
+    )
+    .ok_or("Failed to create TcsQcInput")?;
 
     let qc_output = tcs_qc_input.run_locator()?.results_map().to_owned();
-
-    for censensus in tcs_consensus.iter_mut() {
-        if let Some(joined) = &censensus.joined_consensus {
+    // TODO: there is a bug here for the PR region. need to fix it.
+    for consensus in tcs_consensus.iter_mut() {
+        if let Some(joined) = &consensus.joined_consensus {
             let joined_seq = joined.seq();
+            let joined_qual = joined.qual().to_owned();
             match qc_output.get(joined_seq) {
                 Some(Some(locator)) => {
-                    // TODO: Implement the actual locator run logic
-                    todo!(
-                        "locator {:?} with params: {}, {}, {}, {}, {},",
-                        locator,
-                        qc_algorithm,
-                        qc_upstream.is_some(),
-                        qc_downstream.is_some(),
-                        trim_upstream.is_some(),
-                        trim_downstream.is_some(),
-                    );
+                    let qc_result = get_qc_results(qc_config, locator);
+                    consensus.set_qc(qc_result.clone());
+
+                    if trim_config.is_none() {
+                        consensus.set_trimmed(None);
+                    } else if qc_result == TcsConsensusQcResult::Passed {
+                        let trimmed = trim_sequence_from_locator(
+                            locator,
+                            trim_config.as_ref().unwrap().start as usize,
+                            trim_config.as_ref().unwrap().end as usize,
+                        );
+
+                        match trimmed {
+                            Ok(trimmed) => {
+                                consensus.set_trimmed(Some(Record::with_attrs(
+                                    &format!(
+                                        "{}_{}_trimmed",
+                                        consensus.umi_information_block, consensus.umi_family_size
+                                    ),
+                                    None,
+                                    &trimmed.0,
+                                    &joined_qual[trimmed.1], // Use the range from the locator to get the quality scores
+                                )));
+                            }
+                            Err(e) => {
+                                consensus
+                                    .set_qc(TcsConsensusQcResult::LocatorWithErrors(e.to_string()));
+                                consensus.set_trimmed(None);
+                                dbg!(&consensus);
+                            }
+                        }
+                    } else {
+                        consensus.set_trimmed(None);
+                    }
                 }
                 Some(None) => {
-                    censensus.set_qc(TcsConsensusQcResult::LocatorWithErrors(
+                    consensus.set_qc(TcsConsensusQcResult::LocatorWithErrors(
                         "Locator returned None".to_string(),
                     ));
-                    censensus.set_trimmed(None);
+                    consensus.set_trimmed(None);
                 }
                 None => {
-                    censensus.set_qc(TcsConsensusQcResult::LocatorWithErrors(format!(
+                    consensus.set_qc(TcsConsensusQcResult::LocatorWithErrors(format!(
                         "No locator found for sequence: {}",
                         String::from_utf8_lossy(joined_seq)
                     )));
-                    censensus.set_trimmed(None);
+                    consensus.set_trimmed(None);
                 }
             }
         } else {
-            censensus.set_qc(TcsConsensusQcResult::NoJoinedConsensus);
-            censensus.set_trimmed(None);
+            consensus.set_qc(TcsConsensusQcResult::NoJoinedConsensus);
+            consensus.set_trimmed(None);
         }
     }
 
     Ok(())
+}
+
+fn get_qc_results(qc_config: &QcConfig, locator: &Locator) -> TcsConsensusQcResult {
+    let locator_ref_start = locator.ref_start;
+    let locator_ref_end = locator.ref_end;
+    let qc_indel = locator.indel;
+
+    if qc_config.start.is_none() && qc_config.end.is_none() {
+        return TcsConsensusQcResult::NotRequired;
+    } else if qc_config.start.is_none() {
+        if qc_config
+            .end
+            .as_ref()
+            .unwrap()
+            .contains(&(locator_ref_end as u32))
+            && qc_indel == qc_config.indel
+        {
+            return TcsConsensusQcResult::Passed;
+        }
+    } else if qc_config.end.is_none() {
+        if qc_config
+            .start
+            .as_ref()
+            .unwrap()
+            .contains(&(locator_ref_start as u32))
+            && qc_indel == qc_config.indel
+        {
+            return TcsConsensusQcResult::Passed;
+        }
+    } else {
+        if qc_config
+            .start
+            .as_ref()
+            .unwrap()
+            .contains(&(locator_ref_start as u32))
+            && qc_config
+                .end
+                .as_ref()
+                .unwrap()
+                .contains(&(locator_ref_end as u32))
+            && qc_indel == qc_config.indel
+        {
+            return TcsConsensusQcResult::Passed;
+        }
+    }
+
+    TcsConsensusQcResult::NotPassed(QcNotPassedReport {
+        qc_reference: qc_config.reference.clone(),
+        qc_coordinates1: qc_config.start.clone(),
+        qc_coordinates2: qc_config.end.clone(),
+        qc_indels: qc_config.indel,
+        locator_coordinates: Some(locator_ref_start as u32..locator_ref_end as u32),
+        locator_indels: qc_indel,
+    })
+}
+
+pub fn count_passed(tcs_consensus_vec: &Vec<TcsConsensus>) -> usize {
+    tcs_consensus_vec
+        .iter()
+        .filter(|consensus| matches!(consensus.qc, TcsConsensusQcResult::Passed))
+        .count()
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn test_get_qc_results() {
+        let qc_config1 = QcConfig {
+            reference: "HXB2".to_string(),
+            start: Some(6585..6686),
+            end: Some(7208..7209),
+            indel: true,
+        };
+
+        let qc_config2 = QcConfig {
+            reference: "HXB2".to_string(),
+            start: None,
+            end: None,
+            indel: true,
+        };
+
+        let qc_config3 = QcConfig {
+            reference: "HXB2".to_string(),
+            start: Some(6585..6686),
+            end: Some(7208..7209),
+            indel: false,
+        };
+
+        let qc_config4 = QcConfig {
+            reference: "HXB2".to_string(),
+            start: Some(6580..6670),
+            end: Some(7208..7209),
+            indel: true,
+        };
+
+        let qc_config5 = QcConfig {
+            reference: "HXB2".to_string(),
+            start: Some(6580..6670),
+            end: None,
+            indel: true,
+        };
+
+        let qc_config6 = QcConfig {
+            reference: "HXB2".to_string(),
+            start: None,
+            end: Some(7208..7209),
+            indel: true,
+        };
+
+        let locator = Locator {
+            ref_start: 6585,
+            ref_end: 7208,
+            indel: true,
+            percent_identity: 99.0,
+            query_aligned_string: String::new(),
+            ref_aligned_string: String::new(),
+        };
+
+        let result1 = get_qc_results(&qc_config1, &locator);
+        let result2 = get_qc_results(&qc_config2, &locator);
+        let result3 = get_qc_results(&qc_config3, &locator);
+        let result4 = get_qc_results(&qc_config4, &locator);
+        let result5 = get_qc_results(&qc_config5, &locator);
+        let result6 = get_qc_results(&qc_config6, &locator);
+        assert_eq!(result1, TcsConsensusQcResult::Passed);
+        assert_eq!(result2, TcsConsensusQcResult::NotRequired);
+        assert_eq!(
+            result3,
+            TcsConsensusQcResult::NotPassed(QcNotPassedReport {
+                qc_reference: "HXB2".to_string(),
+                qc_coordinates1: Some(6585..6686),
+                qc_coordinates2: Some(7208..7209),
+                qc_indels: false,
+                locator_coordinates: Some(6585..7208),
+                locator_indels: true,
+            })
+        );
+        assert_eq!(result4, TcsConsensusQcResult::Passed);
+        assert_eq!(result5, TcsConsensusQcResult::Passed);
+        assert_eq!(result6, TcsConsensusQcResult::Passed);
+    }
 }

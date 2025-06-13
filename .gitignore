@@ -1,3 +1,4 @@
 /target
 .DS_Store
 .test.json
+/tests/data/hivdr_control/run_log.txt

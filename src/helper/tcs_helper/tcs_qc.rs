@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::error::Error;
+use std::fmt::Display;
 
 use getset::{Getters, Setters};
 use virust_locator::config::Args as LocatorArgs;
@@ -16,9 +17,12 @@ pub struct TcsQcInput {
 }
 
 impl TcsQcInput {
-    pub fn with_attrs(query: Vec<&[u8]>, reference: String, algorithm_code: u8) -> Option<Self> {
+    pub fn with_attrs(
+        query: Vec<&[u8]>,
+        reference: String,
+        algorithm: QcAlgorithm,
+    ) -> Option<Self> {
         let reference = QcReference::from_string(&reference).unwrap_or_default();
-        let algorithm = QcAlgorithm::from_option_code(algorithm_code).unwrap_or_default();
         if query.is_empty() {
             return None;
         }
@@ -42,7 +46,6 @@ impl TcsQcInput {
         }
     }
 
-    //TODO: Implement the actual locator run logic
     pub fn run_locator(&self) -> Result<TcsQcOutput, Box<dyn Error + Send + Sync>> {
         let args = self.to_locator_args();
         let locator = Locator::build(&args)?;
@@ -58,15 +61,11 @@ impl TcsQcInput {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum QcAlgorithm {
+    #[default]
     SemiGlobal,
     PatternMatching,
-}
-impl Default for QcAlgorithm {
-    fn default() -> Self {
-        QcAlgorithm::SemiGlobal
-    }
 }
 
 impl QcAlgorithm {
@@ -83,6 +82,12 @@ impl QcAlgorithm {
             2 => Some(QcAlgorithm::PatternMatching),
             _ => None,
         }
+    }
+}
+
+impl Display for QcAlgorithm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_option_code())
     }
 }
 

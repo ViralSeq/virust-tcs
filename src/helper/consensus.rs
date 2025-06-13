@@ -97,7 +97,7 @@ pub enum ConsensusError {
 /// * `strategy` - The consensus strategy to use.
 /// * `input` - The input type, either FASTA or FASTQ.
 /// # Returns
-/// * `Result<ConsensusResult, Box<dyn Error>>` - A Result containing the consensus sequence and its quality scores as a ConsensusResult struct or an error.
+/// * `Result<ConsensusResult, Box<dyn Error + Send + Sync>>` - A Result containing the consensus sequence and its quality scores as a ConsensusResult struct or an error.
 /// # Errors
 /// * Returns an error if the input records are empty or if the sequences are not of the same length.
 /// # Example 1, consensus with FASTQ input:
@@ -107,7 +107,7 @@ pub enum ConsensusError {
 /// use bio::io::fasta;
 /// use std::error::Error;
 /// use std::str::from_utf8;
-/// fn main() -> Result<(), Box<dyn Error>> {
+/// fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 ///     let records = vec![
 ///         fastq::Record::with_attrs("SEQ_ID", None, b"ACGT", b"IIII"),
 ///         fastq::Record::with_attrs("SEQ_ID", None, b"ACGT", b"IIII"),
@@ -129,7 +129,7 @@ pub enum ConsensusError {
 /// use bio::io::fasta;
 /// use std::error::Error;
 /// use std::str::from_utf8;
-/// fn main() -> Result<(), Box<dyn Error>> {
+/// fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 ///     let records = vec![
 ///         fasta::Record::with_attrs("SEQ_ID", None, b"ACGG"),
 ///         fasta::Record::with_attrs("SEQ_ID", None, b"ACGG"),
@@ -152,7 +152,7 @@ pub enum ConsensusError {
 /// use bio::io::fasta;
 /// use std::error::Error;
 /// use std::str::from_utf8;
-/// fn main() -> Result<(), Box<dyn Error>> {
+/// fn main() -> Result<(), Box<dyn Error + Send + Sync>> {
 ///     let records = vec![
 ///         fasta::Record::with_attrs("SEQ_ID", None, b"ACGG"),
 ///         fasta::Record::with_attrs("SEQ_ID", None, b"ACGG"),

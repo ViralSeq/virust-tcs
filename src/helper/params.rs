@@ -47,7 +47,7 @@ pub struct RegionParams {
 
     #[serde(deserialize_with = "string_or_number_to_u32")]
     pub end_join_option: u32,
-    #[serde(deserialize_with = "string_or_number_to_u32")]
+    #[serde(default, deserialize_with = "string_or_number_to_u32")]
     pub overlap: u32,
 
     #[serde(alias = "TCS_qc", alias = "TCS_QC")]
@@ -64,11 +64,11 @@ pub struct RegionParams {
     pub ref_end_lower: Option<u32>,
     pub indel: bool,
     pub trim: bool,
-    pub trim_ref: String,
-    #[serde(deserialize_with = "string_or_number_to_u32")]
-    pub trim_ref_start: u32,
-    #[serde(deserialize_with = "string_or_number_to_u32")]
-    pub trim_ref_end: u32,
+    pub trim_ref: Option<String>,
+    #[serde(default, deserialize_with = "string_or_number_to_option_u32")]
+    pub trim_ref_start: Option<u32>,
+    #[serde(default, deserialize_with = "string_or_number_to_option_u32")]
+    pub trim_ref_end: Option<u32>,
 }
 
 impl Display for Params {
@@ -102,14 +102,24 @@ pub struct ValidatedRegionParams {
     pub end_join_option: u32,
     pub overlap: u32,
     pub tcs_qc: bool,
-    pub ref_genome: String,
-    pub ref_start: Option<Range<u32>>,
-    pub ref_end: Option<Range<u32>>,
-    pub indel: bool,
+    pub qc_config: Option<QcConfig>,
     pub trim: bool,
-    pub trim_ref: String,
-    pub trim_ref_start: Option<u32>,
-    pub trim_ref_end: Option<u32>,
+    pub trim_config: Option<TrimConfig>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct QcConfig {
+    pub reference: String,
+    pub start: Option<Range<u32>>,
+    pub end: Option<Range<u32>>,
+    pub indel: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct TrimConfig {
+    pub reference: String,
+    pub start: u32,
+    pub end: u32,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -144,6 +154,12 @@ pub enum ParamsValidationError {
         "If TCS QC is enabled, reference coordinates must be provided for at least one of the start or end. Cannot be both None(0)"
     )]
     TCSQCReferenceCoordinatesNotProvided,
+    #[error(
+        "Trimming coodrinates on the reference outside of the boundaries of the qc reference coordinates"
+    )]
+    TrimmingCoordinatesOutsideQCReference,
+    #[error("Trimming reference coordinates must be provided, cannot be None")]
+    TCSTrimReferenceCoordinatesNotProvided,
 }
 
 impl Display for RegionParams {
@@ -162,9 +178,9 @@ impl Display for RegionParams {
         write!(f, "  ref_end: {},\n", self.ref_end)?;
         write!(f, "  indel: {},\n", self.indel)?;
         write!(f, "  trim: {},\n", self.trim)?;
-        write!(f, "  trim_ref: {},\n", self.trim_ref)?;
-        write!(f, "  trim_ref_start: {},\n", self.trim_ref_start)?;
-        write!(f, "  trim_ref_end: {}\n", self.trim_ref_end)?;
+        write!(f, "  trim_ref: {:?},\n", self.trim_ref)?;
+        write!(f, "  trim_ref_start: {:?},\n", self.trim_ref_start)?;
+        write!(f, "  trim_ref_end: {:?}\n", self.trim_ref_end)?;
         write!(f, "}}")
     }
 }
@@ -263,16 +279,31 @@ impl Params {
                     "HXB2".to_string()
                 };
 
-                trim_ref_start = Some(primer_pairs.trim_ref_start);
-                trim_ref_end = Some(primer_pairs.trim_ref_end);
-                if primer_pairs.trim_ref_start >= primer_pairs.trim_ref_end {
+                trim_ref_start = primer_pairs.trim_ref_start;
+                trim_ref_end = primer_pairs.trim_ref_end;
+
+                if trim_ref_start.is_none() || trim_ref_end.is_none() {
+                    return Err(
+                        ParamsValidationError::TCSTrimReferenceCoordinatesNotProvided.into(),
+                    );
+                }
+                if trim_ref_start.as_ref().unwrap() >= trim_ref_end.as_ref().unwrap() {
                     return Err(ParamsValidationError::InvalidReferenceGenomeCoordinates(
-                        primer_pairs.trim_ref_start,
-                        primer_pairs.trim_ref_end,
+                        *trim_ref_start.as_ref().unwrap(),
+                        *trim_ref_end.as_ref().unwrap(),
                     )
                     .into());
                 }
-            } else {
+
+                // Uncomment this block if you want to validate the trimming coordinates against the QC reference coordinates
+                // if ref_start.is_some()
+                //     && ref_end.is_some()
+                //     && ref_start.as_ref().unwrap().end <= *trim_ref_start.as_ref().unwrap()
+                //     && ref_end.as_ref().unwrap().start >= *trim_ref_start.as_ref().unwrap()
+                // {
+                // } else {
+                //     return Err(ParamsValidationError::TrimmingCoordinatesOutsideQCReference.into());
+                // }
             }
 
             validated_primer_pairs.push(ValidatedRegionParams {
@@ -286,14 +317,26 @@ impl Params {
                 end_join_option: primer_pairs.end_join_option,
                 overlap: primer_pairs.overlap,
                 tcs_qc: primer_pairs.tcs_qc,
-                ref_genome,
-                ref_start,
-                ref_end,
-                indel: primer_pairs.indel,
+                qc_config: if primer_pairs.tcs_qc {
+                    Some(QcConfig {
+                        reference: ref_genome,
+                        start: ref_start,
+                        end: ref_end,
+                        indel: primer_pairs.indel,
+                    })
+                } else {
+                    None
+                },
                 trim: primer_pairs.trim,
-                trim_ref,
-                trim_ref_start,
-                trim_ref_end,
+                trim_config: if primer_pairs.trim {
+                    Some(TrimConfig {
+                        reference: trim_ref,
+                        start: trim_ref_start.unwrap(),
+                        end: trim_ref_end.unwrap(),
+                    })
+                } else {
+                    None
+                },
             });
         }
 
@@ -351,6 +394,9 @@ where
         where
             E: de::Error,
         {
+            if value.trim().is_empty() {
+                return Ok(None);
+            }
             value.parse().map(Some).map_err(|_| {
                 de::Error::invalid_value(Unexpected::Str(value), &"a string representing a u32")
             })
@@ -371,7 +417,7 @@ where
         }
     }
 
-    deserializer.deserialize_option(StringOrNumberVisitor)
+    deserializer.deserialize_any(StringOrNumberVisitor)
 }
 
 fn string_or_number_to_f32<'de, D>(deserializer: D) -> Result<f32, D::Error>
@@ -483,16 +529,17 @@ mod tests {
                     "majority": 0.5,
                     "end_join": true,
                     "end_join_option": 2,
-                    "overlap": 30,
+                    "overlap": "30",
                     "tcs_qc": true,
                     "ref_genome": "HXB2",
                     "ref_start": 100,
+                    "ref_start_lower": 120,
                     "ref_end": 200,
                     "indel": true,
-                    "trim": false,
+                    "trim": true,
                     "trim_ref": "HXB2",
                     "trim_ref_start": 50,
-                    "trim_ref_end": 150
+                    "trim_ref_end": 250
                 }
             ]
         }
@@ -614,6 +661,18 @@ mod tests {
         assert_eq!(
             validated_params.primer_pairs[0].cdna_matching.umi.umi_block,
             "N".repeat(9)
+        );
+    }
+
+    #[test]
+    fn test_validate_params_invalid() {
+        let params: Params = serde_json::from_str(JSON_STR).unwrap();
+        let result = params.validate();
+        dbg!(&result);
+        assert!(result.is_err());
+        assert_eq!(
+            result.unwrap_err().to_string(),
+            "Trimming coodrinates on the reference outside of the boundaries of the qc reference coordinates"
         );
     }
 }

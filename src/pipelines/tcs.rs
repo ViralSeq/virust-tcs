@@ -52,7 +52,7 @@ pub fn tcs(
     dbg!(tcs_report.is_successful());
 
     // TODO: write the TCS report to a file
-    tcs_write(&tcs_report, &mut logger)?;
+    // tcs_write(&tcs_report, &mut logger)?;
 
     if keep_original {
         log_line(&mut logger, "Keeping original files")?;
@@ -66,9 +66,9 @@ pub fn tcs(
     }
 
     if success {
-        log_line(&mut logger, "TCS pipeline completed successfully")?;
+        log_line(&mut logger, "TCS pipeline completed successfully\n")?;
     } else {
-        log_line(&mut logger, "TCS pipeline completed with errors")?;
+        log_line(&mut logger, "TCS pipeline completed with errors\n")?;
     }
 
     Ok(())
@@ -260,13 +260,16 @@ pub fn tcs_main(
 
     // Log all the reasons of errors. Errors are not expected to be many, so we log them all.
     // Also errors are different from fails, errors are unexpected issues that occur during processing.
-    log_line(logger, "Errors encountered during processing")?;
+
     if errors.is_empty() {
-        log_line(logger, "No errors encountered")?;
+        log_line(logger, "No errors encountered when filtering raw sequences")?;
     } else {
         log_line(
             logger,
-            &format!("A total of {} errors encountered", errors.len()),
+            &format!(
+                "A total of {} errors encountered when filtering raw sequences",
+                errors.len()
+            ),
         )?;
     }
 
@@ -398,7 +401,18 @@ pub fn tcs_main(
         }
 
         // End-joining logic below
-
+        if consensus_results.is_empty() {
+            log_line(
+                logger,
+                &format!(
+                    "No consensus sequences generated for region: {}. Skipping end-joining.",
+                    region
+                ),
+            )?;
+            region_report.set_tcs_consensus_results(Some(consensus_results));
+            region_reports.push(region_report);
+            continue; // Skip end-joining if no consensus sequences are available
+        }
         if let Err(error) = join_consensus_fastq_vec(
             &mut consensus_results,
             region_params.end_join_option,
@@ -425,18 +439,48 @@ pub fn tcs_main(
             ),
         )?;
 
-        // TODO: QC
+        // TODO: QC and trimming logic
 
         if region_params.tcs_qc {
-            log_line(logger, &format!("QC for region: {}", region))?;
+            log_line(logger, &format!("QC (and trimming) for region: {}", region))?;
+
+            if let Err(error) = qc_and_trim_consensus_fastq_vec(
+                &mut consensus_results,
+                region_params.qc_config.as_ref(),
+                region_params.trim_config.as_ref(),
+            ) {
+                log_line(
+                    logger,
+                    &format!(
+                        "Error during QC and trimming for region: {}. Error: {}",
+                        region, error
+                    ),
+                )?;
+                tcs_report.add_warning(TcsReportWarnings::QcAndTrimErrorWithRegion(
+                    region.clone(),
+                    error.to_string(),
+                ));
+            } else {
+                log_line(
+                    logger,
+                    &format!(
+                        "QC and trimming completed for region: {}, a total of {} QC/Trimmed TCS obtained",
+                        region,
+                        count_passed(&consensus_results)
+                    ),
+                )?;
+            }
         } else {
             log_line(
                 logger,
                 &format!("QC not required for {}, skip QC and Trimming", region),
             )?;
+            for consensus_result in &mut consensus_results {
+                // If QC is not required, we still need to set the trimmed flag to false
+                consensus_result.set_qc(TcsConsensusQcResult::NotRequired);
+            }
             region_report.set_tcs_consensus_results(Some(consensus_results));
             region_reports.push(region_report);
-            continue; // Continue to the next region if QC is not required
         }
     }
 

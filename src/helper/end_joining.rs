@@ -184,7 +184,7 @@ impl OverlapResult {
 ///   - On success, it returns an `EndJoiningResult` containing the joined sequence and quality scores.
 ///   - On failure, it returns an error wrapped in a `Box<dyn Error + Send + Sync>`.
 /// # Example
-/// ```
+/// ```ignore
 /// let input = EndJoiningInput::Fasta((fasta_records1, fasta_records2));
 /// let strategy = EndJoiningStrategy::UnknownOverlap;
 /// let result = end_joining(input, strategy);

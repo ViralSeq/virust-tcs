@@ -9,9 +9,7 @@ use once_cell::sync::Lazy;
 use regex::Regex;
 
 use crate::helper::params::{CDNAMatching, ForwardMatching, ValidatedParams};
-use crate::helper::tcs_helper::TcsError;
-use crate::helper::tcs_helper::utils::FastqRecordTrimExt;
-use crate::helper::tcs_helper::utils::diff_by_iupac;
+use crate::helper::tcs_helper::*;
 use crate::helper::umi::UMI;
 
 // MARK: FilteredPair
@@ -142,7 +140,7 @@ pub fn filter_r1_r2_pairs(
                 region: region.clone(),
                 umi,
                 r1: r1_record,
-                r2: r2_record,
+                r2: reverse_complement(&r2_record), // MARK: reverse compl R2
             };
 
             return Ok(PairedRecordFilterResult::Valid(filtered_pair));
@@ -578,14 +576,9 @@ mod tests {
             end_join_option: 1,
             overlap: 0,
             tcs_qc: false,
-            ref_genome: "HXB2".to_string(),
-            ref_start: None,
-            ref_end: None,
-            indel: false,
+            qc_config: None,
             trim: false,
-            trim_ref: "HXB2".to_string(),
-            trim_ref_start: None,
-            trim_ref_end: None,
+            trim_config: None,
         };
 
         let validated_params = ValidatedParams {
@@ -601,7 +594,7 @@ mod tests {
                 assert_eq!(filtered_pair.region, "test_region");
                 assert_eq!(filtered_pair.umi.umi_information_block, "TACTGTTTTAC");
                 assert_eq!(filtered_pair.r1.seq(), b"AAATTAACCCCACTCTGTGTTAGTTTAAAGTGCACTGATTTGGGGAATGCTACTAATACCAATAGTAGTAATACCAATAGTAGTAGCGGGGAAATGATGATGGAGAAAGGAGAGATAAAAAACTGCTCTTTCAATATCAGCACAAACATAAGAGGTAAGGTGCAGAAAGAATATGCATTTTTTTATAAACTTGATATAGTACCAATAGATAATACCAGCTATAGGTTGATAAGTTGTAACATCTCAGTCATTACACAGGCCTGTC");
-                assert_eq!(filtered_pair.r2.seq(), b"TTGTCTCATATTTCCTATTTTTCCTATTGTAACAAATGCTCTCCCTGGTCCCCTCTGGATACGGATACTTTTTCTTGTATTGTTGTTGGGTCTTGTACAATTAATTTCTACAGATGTGTTCAGCTGTACTATTATGGTTTTAGCATTGTCCGTGAAATTGACAGATCTAATTACTACCTCTTCTTCTGCTAGACTGCCATTTAACAGCAGTTGAGTTGATACTACTGGCCTAATTCCATGTGTACATTGTACTG");
+                assert_eq!(reverse_complement(&filtered_pair.r2).seq(), b"TTGTCTCATATTTCCTATTTTTCCTATTGTAACAAATGCTCTCCCTGGTCCCCTCTGGATACGGATACTTTTTCTTGTATTGTTGTTGGGTCTTGTACAATTAATTTCTACAGATGTGTTCAGCTGTACTATTATGGTTTTAGCATTGTCCGTGAAATTGACAGATCTAATTACTACCTCTTCTTCTGCTAGACTGCCATTTAACAGCAGTTGAGTTGATACTACTGGCCTAATTCCATGTGTACATTGTACTG");
             }
             PairedRecordFilterResult::Invalid(msg) => panic!("Expected valid pair, got: {:?}", msg),
         }

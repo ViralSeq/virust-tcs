@@ -4,8 +4,10 @@ use std::io::BufWriter;
 use std::io::{Result as IoResult, Write};
 use std::ops::Range;
 
+use bio::alphabets::dna;
 use bio::io::fastq::Record;
 use chrono::Local;
+use virust_locator::prelude::*;
 
 pub fn log_line(writer: &mut BufWriter<File>, message: &str) -> IoResult<()> {
     let now = Local::now().format("%Y-%m-%d %H:%M:%S");
@@ -93,6 +95,75 @@ impl FastqRecordTrimExt for Record {
     }
 }
 
+pub fn trim_sequence_from_locator(
+    locator: &Locator,
+    start: usize,
+    end: usize,
+) -> Result<(Vec<u8>, Range<usize>), Box<dyn Error + Send + Sync>> {
+    let query_aligned = locator.query_aligned_string.as_bytes();
+    let ref_aligned = locator.ref_aligned_string.as_bytes();
+
+    let mut l1 = locator.ref_start;
+    let mut l2 = locator.ref_end;
+
+    let mut g1 = 0;
+    let mut g2 = 0;
+
+    for c in ref_aligned.iter() {
+        if l1 == start {
+            break;
+        }
+        g1 += 1;
+        if *c != b'-' {
+            // '-' is 45 in ASCII
+            l1 += 1;
+        }
+    }
+
+    for c in ref_aligned.iter().rev() {
+        if l2 == end {
+            break;
+        }
+        g2 += 1;
+        if *c != b'-' {
+            l2 -= 1;
+        }
+    }
+
+    // TODO: implement error handling for cases where g1 or g2 exceed the length of query_aligned
+    if g1 >= query_aligned.len() || g2 >= query_aligned.len() || (g1 + g2) > query_aligned.len() {
+        return Err("Gaps exceed the length of the aligned query sequence.".into());
+    }
+
+    let trimmed_seq = query_aligned[g1..query_aligned.len() - g2]
+        .iter()
+        .cloned()
+        .filter(|&c| c != b'-') // Remove gaps
+        .collect();
+
+    let prefix = query_aligned[..g1].iter().filter(|&&c| c != b'-').count();
+    let suffix = query_aligned[query_aligned.len() - g2..]
+        .iter()
+        .filter(|&&c| c != b'-')
+        .count();
+
+    let trimmed_range = prefix..(query_aligned.len() - suffix);
+    Ok((trimmed_seq, trimmed_range))
+}
+
+pub fn reverse_complement(record: &Record) -> Record {
+    let seq = record
+        .seq()
+        .iter()
+        .rev()
+        .map(|&c| dna::complement(c))
+        .collect::<Vec<u8>>();
+
+    let qual = record.qual().iter().rev().cloned().collect::<Vec<u8>>();
+
+    Record::with_attrs(record.id(), record.desc(), &seq, &qual)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,5 +189,65 @@ mod tests {
         let b = "AGCTGW";
         let diff = diff_by_iupac(a, b);
         assert_eq!(diff, vec![1, 2, 5]);
+    }
+
+    #[test]
+
+    fn test_trim_sequence_from_locator() {
+        let seq = "ATCCTTTAACTTCCCTCAGGTCACTCTTTGGCAACGACCCCTCGTCACAATAAAGATAGGGGGGCAACTAAAGGAAGCTCTATTAGATACAGGAGCAGATGATACAGTATTAGAAGAAATGAGTTTGCCAGGAAGATGGAAACCAAAAATGATAGGGGGAATTGGAGGTTTTATCAAAGTAAGACAGTATGATCAGATACTCATAGAAATCTGTGGACATAAAGCTATAGGTACAGTATTAGTAGGACCTACACCTGTCAACATAATTGGAAGAAATCTGTTGACTCAGATTGGTTGCACTTTAAATTTTCCCATTAGCCCTATTGAGACTGTACCAGTAA";
+        let pr = "CCTCAGGTCACTCTTTGGCAACGACCCCTCGTCACAATAAAGATAGGGGGGCAACTAAAGGAAGCTCTATTAGATACAGGAGCAGATGATACAGTATTAGAAGAAATGAGTTTGCCAGGAAGATGGAAACCAAAAATGATAGGGGGAATTGGAGGTTTTATCAAAGTAAGACAGTATGATCAGATACTCATAGAAATCTGTGGACATAAAGCTATAGGTACAGTATTAGTAGGACCTACACCTGTCAACATAATTGGAAGAAATCTGTTGACTCAGATTGGTTGCACTTTAAATTTT".to_string();
+        let args = Args {
+            query: vec![seq.to_string()],
+            reference: "HXB2".to_string(),
+            type_query: "nt".to_string(),
+            algorithm: 1,
+        };
+
+        let locator = Locator::build(&args).unwrap().pop().unwrap().unwrap();
+
+        let trimmed = trim_sequence_from_locator(&locator, 2253, 2549).unwrap();
+
+        let trimmed_str = String::from_utf8_lossy(&trimmed.0);
+
+        let trimmed_range = trimmed.1;
+
+        dbg!(&trimmed_str);
+        dbg!(&trimmed_range);
+        assert_eq!(trimmed_str.to_string(), pr);
+    }
+
+    #[test]
+    fn test_trim_sequence_from_locator_with_gaps() {
+        let seq = "ATCCAACTTCCCTCAGGTCACTCTTTGGCAACGACCCCTCGTCACAATAAAGATAGGGGGGCAACTAAAGGAAGCTCTATTAGATACAGGAGCAGATGATACAGTATTAGAAGAAATGAGTTTGCCAGGAAGATGGAAACCAAAAATGATAGGGGGAATTGGAGGTTTTATCAAAGTAAGACAGTATGATCAGATACTCATAGAAATCTGTGGACATAAAGCTATAGGTACAGTATTAGTAGGACCTACACCTGTCAACATAATTGGAAGAAATCTGTTGACTCAGATTGGTTGCACTTTAAATTTTCCCATTAGCCCGACTATTGAGACTGTACCAGTAA";
+        let pr = "CCTCAGGTCACTCTTTGGCAACGACCCCTCGTCACAATAAAGATAGGGGGGCAACTAAAGGAAGCTCTATTAGATACAGGAGCAGATGATACAGTATTAGAAGAAATGAGTTTGCCAGGAAGATGGAAACCAAAAATGATAGGGGGAATTGGAGGTTTTATCAAAGTAAGACAGTATGATCAGATACTCATAGAAATCTGTGGACATAAAGCTATAGGTACAGTATTAGTAGGACCTACACCTGTCAACATAATTGGAAGAAATCTGTTGACTCAGATTGGTTGCACTTTAAATTTT".to_string();
+        let args = Args {
+            query: vec![seq.to_string()],
+            reference: "HXB2".to_string(),
+            type_query: "nt".to_string(),
+            algorithm: 1,
+        };
+
+        let locator = Locator::build(&args).unwrap().pop().unwrap().unwrap();
+
+        let trimmed = trim_sequence_from_locator(&locator, 2253, 2549).unwrap();
+
+        let trimmed_str = String::from_utf8_lossy(&trimmed.0);
+
+        let trimmed_range = trimmed.1;
+
+        assert_eq!(trimmed_str.to_string(), pr);
+        assert_eq!(trimmed_range, 10..307);
+    }
+
+    #[test]
+    fn test_reverse_complement() {
+        let record = Record::with_attrs("test", None, b"ATCG", b"1234");
+
+        let rev_comp = reverse_complement(&record);
+
+        assert_eq!(rev_comp.seq(), b"CGAT");
+        assert_eq!(rev_comp.qual(), b"4321");
+        assert_eq!(rev_comp.id(), "test");
+        assert_eq!(rev_comp.desc(), None);
     }
 }

@@ -41,7 +41,7 @@ impl UMISummary {
     pub fn get_passed_umis_hashmap(&self) -> HashMap<String, usize> {
         self.umi_freq()
             .iter()
-            .filter(|&(_, &count)| count >= *self.umi_cut_off())
+            .filter(|&(_, &count)| count > *self.umi_cut_off())
             .map(|(umi, &count)| (umi.clone(), count))
             .collect()
     }

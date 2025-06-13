@@ -125,6 +125,7 @@ pub enum TcsReportWarnings {
     UMIDistErrorWithRegion(String, String),
     ConsensusErrorIndividualWithRegion(String, String),
     EndJoiningErrorWithRegion(String, String),
+    QcAndTrimErrorWithRegion(String, String),
 }
 
 impl Display for TcsReportWarnings {
@@ -147,6 +148,13 @@ impl Display for TcsReportWarnings {
                 write!(
                     f,
                     "Encountered error processing Region: {} for end joining, individual end joining aborted, with following error messages: {}",
+                    region, msg
+                )
+            }
+            TcsReportWarnings::QcAndTrimErrorWithRegion(region, msg) => {
+                write!(
+                    f,
+                    "Encountered error processing Region: {} for QC and trimming, individual QC and trimming aborted, with following error messages: {}",
                     region, msg
                 )
             }

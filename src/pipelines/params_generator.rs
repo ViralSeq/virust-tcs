@@ -152,7 +152,21 @@ pub fn exec() {
         } else {
             (String::new(), 0, None, 0, None)
         };
-
+        let trim_ref = if trim_ref.is_empty() {
+            None
+        } else {
+            Some(trim_ref)
+        };
+        let trim_ref_start = if trim_ref_start == 0 {
+            None
+        } else {
+            Some(trim_ref_start)
+        };
+        let trim_ref_end = if trim_ref_end == 0 {
+            None
+        } else {
+            Some(trim_ref_end)
+        };
         regions.push(RegionParams {
             region: region_name,
             forward: forward_primer,
