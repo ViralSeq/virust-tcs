@@ -4,6 +4,7 @@ pub mod filter_r1_r2;
 pub mod tcs_consensus;
 pub mod tcs_qc;
 pub mod tcs_report;
+pub mod tcs_summary;
 pub mod utils;
 
 pub use error::TcsError;

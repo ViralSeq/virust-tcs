@@ -29,9 +29,11 @@ pub struct TcsReport {
 
     #[getset(get = "pub", set = "pub")]
     region_reports: Vec<RegionReport>,
-
+    #[getset(get = "pub")]
     errors: Vec<String>,
+    #[getset(get = "pub")]
     warnings: Vec<TcsReportWarnings>,
+    #[getset(get = "pub", set = "pub")]
     process_end_time: DateTime<Local>,
 }
 
@@ -115,6 +117,14 @@ impl AdvancedSettings {
             keep_original,
             steepness,
             midpoint,
+        }
+    }
+
+    pub fn default() -> Self {
+        AdvancedSettings {
+            keep_original: false,
+            steepness: 0.2,
+            midpoint: 30,
         }
     }
 }

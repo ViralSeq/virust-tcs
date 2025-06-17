@@ -160,6 +160,8 @@ pub enum ParamsValidationError {
     TrimmingCoordinatesOutsideQCReference,
     #[error("Trimming reference coordinates must be provided, cannot be None")]
     TCSTrimReferenceCoordinatesNotProvided,
+    #[error("Request DR params version {0} not supported")]
+    UnsupportedDRParamsVersion(u32),
 }
 
 impl Display for RegionParams {
@@ -345,10 +347,11 @@ impl Params {
         })
     }
 
-    pub fn from_preset(present_name: &str) -> Self {
+    //TODO: place holder for DR params
+    pub fn from_preset(present_name: &str) -> Result<Self, ParamsValidationError> {
         let mut params = Params::new();
         params.email = Some(present_name.to_string());
-        params
+        Ok(params)
     }
 }
 

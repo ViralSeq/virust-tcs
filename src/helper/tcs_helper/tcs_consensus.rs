@@ -438,6 +438,15 @@ pub fn count_passed(tcs_consensus_vec: &Vec<TcsConsensus>) -> usize {
         .count()
 }
 
+pub fn count_joined_and_passed(tcs_consensus_vec: &Vec<TcsConsensus>) -> (usize, usize) {
+    let joined_count = tcs_consensus_vec
+        .iter()
+        .filter(|consensus| consensus.joined_consensus.is_some())
+        .count();
+    let passed_count = count_passed(tcs_consensus_vec);
+    (joined_count, passed_count)
+}
+
 fn process_indel_logic(param_indel_bool: bool, locator_indel: bool) -> bool {
     param_indel_bool || !locator_indel
 }

@@ -4,6 +4,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{BufWriter, Result as IoResult, Write};
 use std::path::{Path, PathBuf};
 
+use chrono::Local;
 use rayon::prelude::*;
 
 use crate::helper::consensus::*;
@@ -38,27 +39,24 @@ pub fn tcs(
 
     // Run the TCS main function
 
-    let (tcs_report, r1_r2_path) = match tcs_main(tcs_report, &mut logger, param, advanced_settings)
-    {
-        Ok((report, r1_r2_path)) => {
-            log_line(&mut logger, "TCS main function completed successfully")?;
-            (report, r1_r2_path)
-        }
-        Err(e) => {
-            log_line(
-                &mut logger,
-                &format!("Fatal error in TCS main function: {}", e),
-            )?;
-            return Err(e);
-        }
-    };
+    let (mut tcs_report, r1_r2_path) =
+        match tcs_main(tcs_report, &mut logger, param, advanced_settings) {
+            Ok((report, r1_r2_path)) => {
+                log_line(&mut logger, "TCS main function completed successfully")?;
+                (report, r1_r2_path)
+            }
+            Err(e) => {
+                log_line(
+                    &mut logger,
+                    &format!("Fatal error in TCS main function: {}", e),
+                )?;
+                return Err(e);
+            }
+        };
 
     let success = tcs_report.is_successful();
 
     // TODO: write the TCS report to a file
-
-    log_line(&mut logger, "Writing TCS report to file")?;
-    tcs_write(&tcs_report, &mut report_logger)?;
 
     if keep_original {
         log_line(&mut logger, "Keeping original files")?;
@@ -76,6 +74,10 @@ pub fn tcs(
     } else {
         log_line(&mut logger, "TCS pipeline completed with errors\n")?;
     }
+
+    log_line(&mut logger, "Writing TCS report to file")?;
+    tcs_report.set_process_end_time(Local::now());
+    tcs_write(&tcs_report, &mut report_logger)?;
 
     Ok(())
 }
@@ -139,7 +141,7 @@ pub fn tcs_main(
         ParamsInputType::PresetID(preset) => {
             log_line(logger, &format!("Using preset parameters: {}", preset))?;
             // Load the preset parameters from the Params struct
-            let p = Params::from_preset(&preset);
+            let p = Params::from_preset(&preset)?;
             tcs_report.set_input_params(p.clone());
             p
         }
@@ -397,6 +399,7 @@ pub fn tcs_main(
                 passed_umi_families_distribution.len()
             ),
         )?;
+        region_report.set_umi_summary(Some(umi_summary));
         log_line(
             logger,
             &format!(
@@ -419,6 +422,7 @@ pub fn tcs_main(
                 ),
             )?;
             region_report.set_tcs_consensus_results(Some(consensus_results));
+
             region_reports.push(region_report);
             continue; // Continue to the next region if end-joining is not required
         }
@@ -461,8 +465,6 @@ pub fn tcs_main(
                 region
             ),
         )?;
-
-        // TODO: QC and trimming logic
 
         if region_params.tcs_qc {
             log_line(logger, &format!("QC (and trimming) for region: {}", region))?;
