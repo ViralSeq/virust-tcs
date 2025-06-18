@@ -5,7 +5,8 @@ use std::io::{Result as IoResult, Write};
 use std::ops::Range;
 
 use bio::alphabets::dna;
-use bio::io::fastq::Record;
+use bio::io::fasta;
+use bio::io::fastq::{self, Record};
 use chrono::Local;
 use virust_locator::prelude::*;
 
@@ -163,6 +164,15 @@ pub fn reverse_complement(record: &Record) -> Record {
 
     Record::with_attrs(record.id(), record.desc(), &seq, &qual)
 }
+
+pub fn fastq_to_fasta_record(fq: &fastq::Record) -> fasta::Record {
+    fasta::Record::with_attrs(fq.id(), fq.desc(), fq.seq())
+}
+
+/// This constant defines the threshold for low abundance in raw reads.
+/// It is set to 0.0005, which means that if the abundance of reads from one Region is less than 0.05% of the total raw reads, it will be considered low abundance.
+/// Potentially from cross-contamination in library preparation or sequencing.
+pub const LOW_ABUNDANCE_THRESHOLD_FOR_RAW_READS: f64 = 0.0005; // 0.05% of raw reads
 
 #[cfg(test)]
 mod tests {

@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 use std::error::Error;
-use std::fmt::Display;
 use std::str::from_utf8;
 
 use bio::bio_types::sequence::SequenceRead;
 use bio::io::fastq::Record;
 use once_cell::sync::Lazy;
 use regex::Regex;
+use serde::{Deserialize, Serialize};
 
 use crate::helper::params::{CDNAMatching, ForwardMatching, ValidatedParams};
 use crate::helper::tcs_helper::*;
@@ -29,36 +29,37 @@ pub enum PairedRecordFilterResult {
 }
 
 // MARK: FilterPairInvalidReason
-#[derive(Debug, PartialEq, Clone, Eq, Hash)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash, Deserialize, Serialize)]
 pub enum FilterPairInvalidReason {
     InvalidRecords(String),
     GeneralFilterFailed(String),
     R1MatchR2Mismatch(String),
     R2MatchR1Mismatch(String),
     R1R2MatchDifferentRegions(String),
-    NoMatch,
+    NoMatch(String),
 }
 
-impl Display for FilterPairInvalidReason {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FilterPairInvalidReason::InvalidRecords(msg) => write!(f, "Invalid records: {}", msg),
-            FilterPairInvalidReason::GeneralFilterFailed(msg) => {
-                write!(f, "General filter failed: {}", msg)
-            }
-            FilterPairInvalidReason::R1MatchR2Mismatch(region) => {
-                write!(f, "R1 matches but R2 does not in region(s): {}", region)
-            }
-            FilterPairInvalidReason::R2MatchR1Mismatch(region) => {
-                write!(f, "R2 matches but R1 does not in region(s): {}", region)
-            }
-            FilterPairInvalidReason::R1R2MatchDifferentRegions(msg) => {
-                write!(f, "R1 and R2 match different regions: {}", msg)
-            }
-            FilterPairInvalidReason::NoMatch => write!(f, "No match found"),
-        }
-    }
-}
+// use std::fmt::{self, Display};
+// impl Display for FilterPairInvalidReason {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             FilterPairInvalidReason::InvalidRecords(msg) => write!(f, "Invalid records: {}", msg),
+//             FilterPairInvalidReason::GeneralFilterFailed(msg) => {
+//                 write!(f, "General filter failed: {}", msg)
+//             }
+//             FilterPairInvalidReason::R1MatchR2Mismatch(region) => {
+//                 write!(f, "R1 matches but R2 does not in region(s): {}", region)
+//             }
+//             FilterPairInvalidReason::R2MatchR1Mismatch(region) => {
+//                 write!(f, "R2 matches but R1 does not in region(s): {}", region)
+//             }
+//             FilterPairInvalidReason::R1R2MatchDifferentRegions(msg) => {
+//                 write!(f, "R1 and R2 match different regions: {}", msg)
+//             }
+//             FilterPairInvalidReason::NoMatch => write!(f, "No match found"),
+//         }
+//     }
+// }
 
 // MARK: filter_r1_r2_pairs
 
@@ -159,7 +160,10 @@ pub fn filter_r1_r2_pairs(
             );
         } else {
             // Neither R1 nor R2 matches
-            region_no_matches.insert(region.clone(), FilterPairInvalidReason::NoMatch);
+            region_no_matches.insert(
+                region.clone(),
+                FilterPairInvalidReason::NoMatch("No match".to_string()),
+            );
         }
     }
 
@@ -335,9 +339,9 @@ fn consolidate_no_match(
 
     if region_no_matches
         .values()
-        .all(|v| matches!(v, FilterPairInvalidReason::NoMatch))
+        .all(|v| matches!(v, FilterPairInvalidReason::NoMatch(_)))
     {
-        return Ok(FilterPairInvalidReason::NoMatch);
+        return Ok(FilterPairInvalidReason::NoMatch("No match".to_string()));
     }
 
     // code for R1R2MatchDifferentRegions
@@ -368,7 +372,7 @@ fn consolidate_no_match(
             r2_regions.join(", "),
         ));
     } else {
-        return Ok(FilterPairInvalidReason::NoMatch);
+        return Ok(FilterPairInvalidReason::NoMatch("No match".to_string()));
     }
 }
 
@@ -603,11 +607,20 @@ mod tests {
     #[test]
     fn test_consolidate_no_match() {
         let mut region_no_matches1 = HashMap::new();
-        region_no_matches1.insert("RT".to_string(), FilterPairInvalidReason::NoMatch);
-        region_no_matches1.insert("V1V3".to_string(), FilterPairInvalidReason::NoMatch);
+        region_no_matches1.insert(
+            "RT".to_string(),
+            FilterPairInvalidReason::NoMatch("No match".to_string()),
+        );
+        region_no_matches1.insert(
+            "V1V3".to_string(),
+            FilterPairInvalidReason::NoMatch("No match".to_string()),
+        );
 
         let mut region_no_matches2 = HashMap::new();
-        region_no_matches2.insert("RT".to_string(), FilterPairInvalidReason::NoMatch);
+        region_no_matches2.insert(
+            "RT".to_string(),
+            FilterPairInvalidReason::NoMatch("No match".to_string()),
+        );
         region_no_matches2.insert(
             "V1V3".to_string(),
             FilterPairInvalidReason::R1MatchR2Mismatch(
@@ -616,7 +629,10 @@ mod tests {
         );
 
         let mut region_no_matches3 = HashMap::new();
-        region_no_matches3.insert("RT".to_string(), FilterPairInvalidReason::NoMatch);
+        region_no_matches3.insert(
+            "RT".to_string(),
+            FilterPairInvalidReason::NoMatch("No match".to_string()),
+        );
         region_no_matches3.insert(
             "V1V3".to_string(),
             FilterPairInvalidReason::R1MatchR2Mismatch(
@@ -646,7 +662,10 @@ mod tests {
 
         let result = consolidate_no_match(&region_no_matches1);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap(), FilterPairInvalidReason::NoMatch);
+        assert_eq!(
+            result.unwrap(),
+            FilterPairInvalidReason::NoMatch("No match".to_string())
+        );
 
         let result = consolidate_no_match(&region_no_matches2);
         assert!(result.is_ok());

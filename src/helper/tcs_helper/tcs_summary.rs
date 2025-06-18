@@ -1,8 +1,14 @@
+use std::collections::HashMap;
+use std::error::Error;
+use std::fs::File;
+use std::io::{BufWriter, Result as IoResult, Write};
+use std::path;
+
 use chrono::{DateTime, Local};
 use getset::{Getters, Setters};
 use serde::{Deserialize, Serialize};
 
-use crate::helper::tcs_helper::{tcs_consensus::count_joined_and_passed, *};
+use crate::helper::tcs_helper::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Getters, Setters)]
 pub struct TcsReportSummary {
@@ -84,7 +90,6 @@ impl RegionReportSummary {
         }
     }
 
-    //TODO: finish this function
     pub fn from_region_report(region_report: &RegionReport) -> Self {
         let mut region_summary = RegionReportSummary::new(region_report.region_name().to_owned());
         region_summary.set_filtered_reads_for_region(*region_report.filtered_reads_for_region());
@@ -92,7 +97,7 @@ impl RegionReportSummary {
         let tcs_consensus_results = region_report.tcs_consensus_results();
         if let Some(results) = tcs_consensus_results {
             region_summary.set_tcs_number(results.len());
-            let (n_joined, n_passed) = count_joined_and_passed(results);
+            let (n_joined, n_passed) = tcs_consensus::count_joined_and_passed(results);
             region_summary.set_joined_tcs_number(n_joined);
             region_summary.set_tcs_passed_qc_number(n_passed);
         };
@@ -119,6 +124,65 @@ impl RegionReportSummary {
     }
 }
 
+pub fn tcs_report_write(
+    tcs_report: &TcsReport,
+    report_logger: &mut BufWriter<File>,
+) -> IoResult<()> {
+    writeln!(
+        report_logger,
+        "{}",
+        serde_json::to_string_pretty(&TcsReportSummary::from_tcs_report(&tcs_report))? // if the full raw report is needed, use the following line instead:
+                                                                                       // serde_json::to_string_pretty(&tcs_report)?
+    )?;
+    report_logger.flush()?;
+
+    Ok(())
+}
+
+pub fn raw_sequence_invalid_reason_write(
+    tcs_report: &TcsReport,
+    path: &str,
+) -> Result<(), Box<dyn Error>> {
+    let output_path = path::Path::new(path);
+    if !output_path.exists() {
+        return Err(
+            TcsError::UnexpectedError("Unable to access the output directory".to_string()).into(),
+        );
+    }
+
+    let file = output_path.join("raw_sequence_invalid_reasons.csv");
+
+    let reasons = tablulate_failed_match_reasons(&tcs_report.failed_match_reasons());
+    let data = serde_json::to_string_pretty(&reasons)?;
+    let json: Vec<(HashMap<String, String>, usize)> = serde_json::from_str(&data)?;
+
+    // 1. first, sum totals by main category
+    let mut main_totals: HashMap<String, usize> = HashMap::new();
+    for (cat_map, count) in &json {
+        let main_cat = cat_map.keys().next().unwrap();
+        *main_totals.entry(main_cat.clone()).or_insert(0) += count;
+    }
+
+    // 2. Now, output rows with all four columns
+
+    let mut writer = csv::Writer::from_path(file)?;
+    writer.write_record(&["main_category", "sub_category", "count_sub", "count_main"])?;
+
+    for (cat_map, count) in &json {
+        let main_cat = cat_map.keys().next().unwrap();
+        let sub_cat = cat_map.values().next().unwrap();
+        let main_count = main_totals.get(main_cat).unwrap_or(&0);
+        writer.write_record(&[
+            main_cat,
+            sub_cat,
+            &count.to_string(),
+            &main_count.to_string(),
+        ])?;
+    }
+    writer.flush()?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -132,5 +196,6 @@ mod tests {
 
         dbg!(&summary);
         assert_eq!(summary.current_version(), env!("CARGO_PKG_VERSION"));
+        assert_eq!(summary.region_summaries().len(), 5);
     }
 }

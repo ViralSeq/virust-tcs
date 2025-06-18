@@ -1,12 +1,13 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufWriter, Result as IoResult, Write};
+use std::io::BufWriter;
 use std::path::{Path, PathBuf};
 
 use chrono::Local;
 use rayon::prelude::*;
 
+use crate::cli::BANNER;
 use crate::helper::consensus::*;
 use crate::helper::io::read_fastq_file;
 use crate::helper::params::Params;
@@ -69,15 +70,32 @@ pub fn tcs(
         log_line(&mut logger, "No original files to delete")?;
     }
 
-    if success {
-        log_line(&mut logger, "TCS pipeline completed successfully\n")?;
-    } else {
-        log_line(&mut logger, "TCS pipeline completed with errors\n")?;
-    }
-
     log_line(&mut logger, "Writing TCS report to file")?;
     tcs_report.set_process_end_time(Local::now());
-    tcs_write(&tcs_report, &mut report_logger)?;
+    tcs_report_write(&tcs_report, &mut report_logger)?;
+    tcs_sequence_data_write(&tcs_report, input)?;
+    raw_sequence_invalid_reason_write(&tcs_report, input)?;
+
+    if success {
+        log_line(
+            &mut logger,
+            &format!(
+                "TCS pipeline completed successfully with {} warning(s)",
+                tcs_report.warnings().len()
+            ),
+        )?;
+        println!(
+            "TCS pipeline completed successfully with \x1b[0;95m{} warning(s)\x1b[0m\n",
+            tcs_report.warnings().len()
+        );
+    } else {
+        log_line(&mut logger, "TCS pipeline completed with errors\n")?;
+        println!(
+            "TCS pipeline completed with \x1b[0;91m{} error(s)\x1b[0m and \x1b[0;95m{} warning(s)\x1b[0m\n",
+            tcs_report.errors().len(),
+            tcs_report.warnings().len()
+        );
+    }
 
     Ok(())
 }
@@ -91,6 +109,8 @@ pub fn tcs_main(
     param: ParamsInputType,
     advanced_settings: AdvancedSettings,
 ) -> Result<(TcsReport, Option<(PathBuf, PathBuf)>), Box<dyn Error>> {
+    println!("{}", BANNER);
+
     let keep_original = *advanced_settings.keep_original();
     let steepness = *advanced_settings.steepness();
     let midpoint = *advanced_settings.midpoint();
@@ -181,6 +201,11 @@ pub fn tcs_main(
         }
     };
 
+    let mut regions = Vec::new();
+    for region_params in validated_params.primer_pairs.iter() {
+        regions.push(region_params.region.to_string());
+    }
+
     let pairs = match read_fastq_file(&fastq_files) {
         Ok(pairs) => pairs,
         Err(e) => {
@@ -206,7 +231,7 @@ pub fn tcs_main(
     // If the pair is invalid, it will return a reason for failure.
     // If there is an error processing the pairs, it will log the error to the logger and return a TcsReport with the error.
     // The TcsReport with error will be handled in the downstream processing.
-    let (groups, fails, errors) = pairs
+    let (mut groups, fails, errors) = pairs
         .par_iter()
         .fold(
             // Each thread starts with its own empty results
@@ -250,11 +275,24 @@ pub fn tcs_main(
             },
         );
 
+    for region in &regions {
+        groups.entry(region.clone()).or_insert_with(Vec::new);
+    }
+
     // log the de-multiplexed pairs
     // these de-muliplexed pairs are grouped by region, and will be processed downstream.
     // we log the number of valid pairs for each region.
     log_line(logger, "De-multiplexed pairs")?;
     for (region, filtered_pairs) in &groups {
+        if !filtered_pairs.is_empty()
+            && (filtered_pairs.len() as f64 / pairs.len() as f64)
+                < LOW_ABUNDANCE_THRESHOLD_FOR_RAW_READS
+        {
+            tcs_report.add_warning(TcsReportWarnings::LowAbundanceWarning(
+                region.clone(),
+                filtered_pairs.len() as f64 / pairs.len() as f64,
+            ));
+        }
         log_line(
             logger,
             &format!(
@@ -270,8 +308,8 @@ pub fn tcs_main(
     log_line(logger, "Failed pairs")?;
     let mut fail_frequency = HashMap::new();
     for fail in &fails {
-        *fail_frequency.entry(fail.to_string()).or_insert(0) += 1;
-        tcs_report.add_failed_match_reason(fail.to_string());
+        *fail_frequency.entry(fail).or_insert(0) += 1;
+        tcs_report.add_failed_match_reason(fail.clone());
     }
 
     log_line(
@@ -524,18 +562,6 @@ pub fn tcs_main(
     // 8. Error handling and logging. Some errors are expected, so we do not panic, but log them and continue processing.
 
     Ok((tcs_report, Some((r1_file.clone(), r2_file.clone()))))
-}
-
-//TODO: write details of the function
-pub fn tcs_write(tcs_report: &TcsReport, report_logger: &mut BufWriter<File>) -> IoResult<()> {
-    writeln!(
-        report_logger,
-        "{}",
-        serde_json::to_string_pretty(tcs_report)?
-    )?;
-    report_logger.flush()?;
-
-    Ok(())
 }
 
 fn tcs_init(input: &str) -> Result<(TcsReport, BufWriter<File>, BufWriter<File>), Box<dyn Error>> {

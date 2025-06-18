@@ -1,11 +1,15 @@
+use std::collections::HashMap;
 use std::fmt::Display;
 
 use chrono::{DateTime, Local};
 use getset::{Getters, Setters};
+use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
 use crate::helper::params::Params;
+use crate::helper::tcs_helper::LOW_ABUNDANCE_THRESHOLD_FOR_RAW_READS;
 use crate::helper::tcs_helper::TcsConsensus;
+use crate::helper::tcs_helper::filter_r1_r2::FilterPairInvalidReason;
 use crate::helper::umis::UMISummary;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Getters, Setters)]
@@ -25,7 +29,7 @@ pub struct TcsReport {
     total_reads: usize,
 
     #[getset(get = "pub", set = "pub")]
-    failed_match_reasons: Vec<String>,
+    failed_match_reasons: Vec<FilterPairInvalidReason>,
 
     #[getset(get = "pub", set = "pub")]
     region_reports: Vec<RegionReport>,
@@ -85,7 +89,7 @@ impl TcsReport {
         self.errors.push(error);
     }
 
-    pub fn add_failed_match_reason(&mut self, reason: String) {
+    pub fn add_failed_match_reason(&mut self, reason: FilterPairInvalidReason) {
         self.failed_match_reasons.push(reason);
     }
 
@@ -132,6 +136,7 @@ impl AdvancedSettings {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TcsReportWarnings {
     R1R2filteringwarning(String),
+    LowAbundanceWarning(String, f64),
     UMIDistErrorWithRegion(String, String),
     ConsensusErrorIndividualWithRegion(String, String),
     EndJoiningErrorWithRegion(String, String),
@@ -168,6 +173,75 @@ impl Display for TcsReportWarnings {
                     region, msg
                 )
             }
+            TcsReportWarnings::LowAbundanceWarning(region, abundance) => {
+                write!(
+                    f,
+                    "Low abundance warning for Region {}: Abundance {} is below threshold: {}, potential cross-contamination",
+                    region, abundance, LOW_ABUNDANCE_THRESHOLD_FOR_RAW_READS
+                )
+            }
         }
     }
 }
+
+pub fn tablulate_failed_match_reasons(
+    failed_match_reasons: &[FilterPairInvalidReason],
+) -> Vec<(FilterPairInvalidReason, usize)> {
+    let mut reason_counts: HashMap<FilterPairInvalidReason, usize> = HashMap::new();
+    for reason in failed_match_reasons {
+        *reason_counts.entry(reason.clone()).or_insert(0) += 1;
+    }
+
+    reason_counts
+        .into_iter()
+        .sorted_by_key(|x| std::cmp::Reverse(x.1))
+        .collect::<Vec<_>>()
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum ReasonCount {
+    Simple {
+        total: usize,
+    },
+    WithSubcats {
+        total: usize,
+        #[serde(flatten)]
+        subcategories: HashMap<String, usize>,
+    },
+}
+
+// pub fn tablulate_failed_match_reasons_for_json(
+//     failed_match_reasons: &[String],
+// ) -> Vec<ReasonCount> {
+//     let mut nested_reason_counts = Vec::new();
+//     let reason_counts = tablulate_failed_match_reasons(failed_match_reasons);
+//     for (main_reason, count) in &reason_counts {
+//         if main_reason.contains("No match found") {
+//             nested_reason_counts.push(ReasonCount::Simple { total: *count });
+//             continue;
+//         }
+
+//         let sub = main_reason.split(":").collect::<Vec<&str>>();
+
+//         match sub.as_slice() {
+//             [main, subcat] => {
+//                 let mut subcategories = HashMap::new();
+//                 subcategories.insert(subcat.to_string(), *count);
+//                 nested_reason_counts.push(ReasonCount::WithSubcats {
+//                     total: *count,
+//                     subcategories,
+//                 });
+//             }
+//             [main] => {
+//                 nested_reason_counts.push(ReasonCount::Simple { total: *count });
+//             }
+//             _ => {
+//                 // Handle unexpected format
+//                 nested_reason_counts.push(ReasonCount::Simple { total: *count });
+//             }
+//         }
+//     }
+
+//     nested_reason_counts
+// }

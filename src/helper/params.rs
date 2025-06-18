@@ -297,15 +297,14 @@ impl Params {
                     .into());
                 }
 
-                // Uncomment this block if you want to validate the trimming coordinates against the QC reference coordinates
-                // if ref_start.is_some()
-                //     && ref_end.is_some()
-                //     && ref_start.as_ref().unwrap().end <= *trim_ref_start.as_ref().unwrap()
-                //     && ref_end.as_ref().unwrap().start >= *trim_ref_start.as_ref().unwrap()
-                // {
-                // } else {
-                //     return Err(ParamsValidationError::TrimmingCoordinatesOutsideQCReference.into());
-                // }
+                if ref_start.is_some()
+                    && ref_end.is_some()
+                    && ref_start.as_ref().unwrap().end <= *trim_ref_start.as_ref().unwrap()
+                    && ref_end.as_ref().unwrap().start >= *trim_ref_start.as_ref().unwrap()
+                {
+                } else {
+                    return Err(ParamsValidationError::TrimmingCoordinatesOutsideQCReference.into());
+                }
             }
 
             validated_primer_pairs.push(ValidatedRegionParams {
