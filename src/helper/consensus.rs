@@ -16,13 +16,19 @@ pub struct ConsensusParams {
     q0: f64,
 }
 
+pub const DEFAULT_K: f64 = 0.2; // Default steepness parameter
+pub const DEFAULT_Q0: f64 = 30.0; // Default midpoint parameter
+
 // MARK: Default CosnesusParams
 /// Implementing the Default trait for ConsensusParams
 /// allows for easy instantiation with default values.
 /// The default values are `k = 0.2` and `q0 = 30.0`.
 impl Default for ConsensusParams {
     fn default() -> Self {
-        Self { k: 0.2, q0: 30.0 }
+        Self {
+            k: DEFAULT_K,
+            q0: DEFAULT_Q0,
+        }
     }
 }
 

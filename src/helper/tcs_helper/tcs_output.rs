@@ -2,6 +2,7 @@ use super::*;
 
 use std::error::Error;
 use std::fs;
+use std::ops::Range;
 use std::path::Path;
 
 use bio::io::{fasta, fastq};
@@ -17,6 +18,8 @@ pub struct TcsOutput<'a> {
     joined_tcs_fastq: Option<Vec<&'a fastq::Record>>,
     #[getset(get = "pub")]
     joined_tcs_passed_qc_fastq: Option<Vec<&'a fastq::Record>>,
+    #[getset(get = "pub")]
+    qc_failed_reasons: Option<Vec<(String, QcNotPassedReport)>>,
 }
 
 impl<'a> TcsOutput<'a> {
@@ -27,6 +30,7 @@ impl<'a> TcsOutput<'a> {
                 r2_fastq: Vec::new(),
                 joined_tcs_fastq: None,
                 joined_tcs_passed_qc_fastq: None,
+                qc_failed_reasons: None,
             };
         }
 
@@ -34,6 +38,7 @@ impl<'a> TcsOutput<'a> {
         let mut r2_seqs = Vec::new();
         let mut joined_seqs = Vec::new();
         let mut joined_passed_qc_seqs = Vec::new();
+        let mut qc_failed_reasons = Vec::new();
 
         for tcs in region_report.tcs_consensus_results().as_ref().unwrap() {
             r1_seqs.push(tcs.r1_consensus());
@@ -47,6 +52,9 @@ impl<'a> TcsOutput<'a> {
                 if let Some(joined) = tcs.joined_consensus() {
                     joined_passed_qc_seqs.push(joined);
                 }
+            }
+            if let TcsConsensusQcResult::NotPassed(reason) = tcs.qc() {
+                qc_failed_reasons.push((tcs.umi_information_block().to_string(), reason.clone()));
             }
         }
 
@@ -62,6 +70,11 @@ impl<'a> TcsOutput<'a> {
                 None
             } else {
                 Some(joined_passed_qc_seqs)
+            },
+            qc_failed_reasons: if qc_failed_reasons.is_empty() {
+                None
+            } else {
+                Some(qc_failed_reasons)
             },
         }
     }
@@ -102,6 +115,43 @@ pub fn tcs_sequence_data_write(tcs_report: &TcsReport, path: &str) -> Result<(),
         if let Some(joined_passed_qc) = tcs_output.joined_tcs_passed_qc_fastq() {
             write_fastq_and_fasta(joined_passed_qc, &region_dir, "joined_passed_qc")?;
         }
+
+        let qc_failed_reasons_file = region_dir.join("qc_failed_reasons.csv");
+        let mut csv_writer = csv::Writer::from_path(qc_failed_reasons_file)?;
+        csv_writer.write_record([
+            "UMI",
+            "qc_reference",
+            "qc_coordinates1_start",
+            "qc_coordinates1_end",
+            "qc_coordinates2_start",
+            "qc_coordinates2_end",
+            "qc_indels",
+            "locator_coordinates_start",
+            "locator_coordinates_end",
+            "locator_indels",
+        ])?;
+
+        if let Some(qc_reasons) = tcs_output.qc_failed_reasons() {
+            for (umi, reason) in qc_reasons {
+                let (coord1_start, coord1_end) = match_coordinates(reason.qc_coordinates1());
+                let (coord2_start, coord2_end) = match_coordinates(reason.qc_coordinates2());
+                let (loc_start, loc_end) = match_coordinates(reason.locator_coordinates());
+                csv_writer.write_record([
+                    umi,
+                    &reason.qc_reference().to_string(),
+                    &coord1_start.to_string(),
+                    &coord1_end.to_string(),
+                    &coord2_start.to_string(),
+                    &coord2_end.to_string(),
+                    &reason.qc_indels().to_string(),
+                    &loc_start.to_string(),
+                    &loc_end.to_string(),
+                    &reason.locator_indels().to_string(),
+                ])?;
+            }
+        }
+
+        csv_writer.flush()?;
     }
     Ok(())
 }
@@ -126,4 +176,11 @@ fn write_fastq_and_fasta(
         fasta_writer.write_record(&fastq_to_fasta_record(record))?;
     }
     Ok(())
+}
+
+fn match_coordinates(coord: &Option<Range<u32>>) -> (u32, u32) {
+    match coord {
+        Some(range) => (range.start, range.end),
+        None => (0, 0), // Default values if no coordinates are provided
+    }
 }

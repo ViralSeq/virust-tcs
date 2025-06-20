@@ -21,7 +21,6 @@ once_cell = "1.21"
 getset = "0.1.6"
 csv = "1.3.1"
 
-
 [[bin]]
 name = "tcs"
 path = "src/main.rs"

@@ -1,12 +1,13 @@
+use std::collections::HashMap;
 use std::error::Error as StdError;
 use std::fmt::Display;
 use std::ops::Range;
 
 use bio::alphabets;
+use once_cell::sync::Lazy;
 use regex::Regex;
-use serde::Deserializer;
 use serde::de::Error;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
 use crate::helper::umi::UMI;
@@ -90,6 +91,15 @@ impl Display for Params {
     }
 }
 
+pub static PRESETS: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
+    let mut m = HashMap::new();
+    m.insert("v1", include_str!("../../resources/dr_presets/v1.json"));
+    m.insert("v2", include_str!("../../resources/dr_presets/v2.json"));
+    m.insert("v3", include_str!("../../resources/dr_presets/v3.json"));
+    m.insert("v4", include_str!("../../resources/dr_presets/v4.json"));
+    m
+});
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ValidatedRegionParams {
     pub platform_error_rate: f32,
@@ -160,8 +170,10 @@ pub enum ParamsValidationError {
     TrimmingCoordinatesOutsideQCReference,
     #[error("Trimming reference coordinates must be provided, cannot be None")]
     TCSTrimReferenceCoordinatesNotProvided,
-    #[error("Request DR params version {0} not supported")]
-    UnsupportedDRParamsVersion(u32),
+    #[error("Request DR params version {0} not supported, supported versions are {1}")]
+    UnsupportedDRParamsVersion(String, String),
+    #[error("Failed to parse JSON: {0}")]
+    JsonParseError(String),
 }
 
 impl Display for RegionParams {
@@ -204,7 +216,7 @@ impl Params {
     /// Reads a JSON string and converts it into a `Params` struct.
     /// This function uses the `serde_json` library to parse the JSON string.
     /// It ignores extra fields in the JSON string that are not defined in the `Params` struct.
-    pub fn from_json_sting(json_str: &str) -> Result<Self, Box<dyn StdError>> {
+    pub fn from_json_string(json_str: &str) -> Result<Self, serde_json::Error> {
         let params = serde_json::from_str(json_str)?;
         Ok(params)
     }
@@ -346,12 +358,33 @@ impl Params {
         })
     }
 
-    //TODO: place holder for DR params
+    /// Reads a preset name and returns the corresponding `Params` struct.
+    /// This function looks up the preset name in the `PRESETS` map and attempts to parse the JSON string
+    /// associated with that preset name into a `Params` struct.
+    /// # Arguments
+    /// * `present_name` - A string slice representing the name of the preset.
+    /// # Returns
+    /// * `Result<Params, ParamsValidationError>` - A result containing the `Params` struct if successful,
+    ///   or a `ParamsValidationError` if the preset name is not found or if there is an error parsing the JSON.
     pub fn from_preset(present_name: &str) -> Result<Self, ParamsValidationError> {
-        let mut params = Params::new();
-        params.email = Some(present_name.to_string());
-        Ok(params)
+        let mut all_version_names = PRESETS.keys().cloned().collect::<Vec<_>>();
+        all_version_names.sort();
+        if let Some(json_str) = PRESETS.get(present_name) {
+            Params::from_json_string(json_str)
+                .map_err(|e| ParamsValidationError::JsonParseError(e.to_string()))
+        } else {
+            Err(ParamsValidationError::UnsupportedDRParamsVersion(
+                present_name.to_string(),
+                all_version_names.join(", "),
+            ))
+        }
     }
+}
+
+pub fn dr_presets_names() -> Vec<&'static str> {
+    let mut all_version_names = PRESETS.keys().cloned().collect::<Vec<_>>();
+    all_version_names.sort();
+    all_version_names
 }
 
 fn string_or_number_to_u32<'de, D>(deserializer: D) -> Result<u32, D::Error>
@@ -682,5 +715,44 @@ mod tests {
             result.unwrap_err().to_string(),
             "Trimming coodrinates on the reference outside of the boundaries of the qc reference coordinates"
         );
+    }
+
+    #[test]
+    fn test_preset_params() {
+        let preset_name = ["v1", "v2", "v3", "v4"];
+
+        for name in preset_name.iter() {
+            let params = Params::from_preset(name);
+            assert!(params.is_ok(), "Failed to load preset: {}", name);
+            let params = params.unwrap();
+            assert!(
+                !params.primer_pairs.is_empty(),
+                "No primer pairs found in preset: {}",
+                name
+            );
+            let validated_params = params.validate();
+            assert!(
+                validated_params.is_ok(),
+                "Validation failed for preset: {}",
+                name
+            );
+        }
+    }
+
+    #[test]
+    fn test_preset_params_invalid() {
+        let invalid_preset_name = "invalid_preset";
+        let params = Params::from_preset(invalid_preset_name);
+        dbg!(&params);
+        assert!(params.is_err(), "Expected error for invalid preset");
+        if let Err(e) = params {
+            assert_eq!(
+                e.to_string(),
+                format!(
+                    "Request DR params version {} not supported, supported versions are v1, v2, v3, v4",
+                    invalid_preset_name
+                )
+            );
+        }
     }
 }

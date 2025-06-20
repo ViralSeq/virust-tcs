@@ -170,7 +170,7 @@ pub fn tcs_main(
                 logger,
                 &format!("Reading parameters from file: {}", file_path),
             )?;
-            match Params::from_json_sting(&fs::read_to_string(file_path)?) {
+            match Params::from_json_string(&fs::read_to_string(file_path)?) {
                 Ok(p) => {
                     tcs_report.set_input_params(p.clone());
                     p
@@ -550,16 +550,6 @@ pub fn tcs_main(
     }
 
     tcs_report.set_region_reports(region_reports);
-
-    // TODO: downstream processing
-    // 1. consensus calling for each region. DONE!
-    // 2. end-joining of consensus sequences. DONE!
-    // 3. qc DONE!
-    // 4. trimming DONE!
-    // 5. write fastq and fasta files.
-    // 6. write UMI files in JSON format.
-    // 7. export a summary report.
-    // 8. Error handling and logging. Some errors are expected, so we do not panic, but log them and continue processing.
 
     Ok((tcs_report, Some((r1_file.clone(), r2_file.clone()))))
 }

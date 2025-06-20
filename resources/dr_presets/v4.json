@@ -4,7 +4,7 @@
   "primer_pairs": [
     {
       "region": "RT",
-      "cdna": "GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCTNNNNNNNNNNNCAGTCACTATAGGCTGTACTGTCCATTTATC",
+      "cdna": "GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCTNNNNNNNNNNNCAGTAAGGAATGGAGGTTCTTTCTGATG",
       "forward": "GCCTCCCTCGCGCCATCAGAGATGTGTATAAGAGACAGNNNNGGCCATTGACAGAAGAAAAAATAAAAGC",
       "majority": 0,
       "end_join": true,
@@ -13,7 +13,7 @@
       "TCS_QC": true,
       "ref_genome": "HXB2",
       "ref_start": 2648,
-      "ref_end": 3257,
+      "ref_end": 3209,
       "indel": true,
       "trim": false
     },
@@ -37,16 +37,16 @@
     },
     {
       "region": "IN",
-      "cdna": "GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCTNNNNNNNNNNNATCGAATACTGCCATTTGTACTGC",
-      "forward": "GCCTCCCTCGCGCCATCAGAGATGTGTATAAGAGACAGNNNNAAAAGGAGAAGCCATGCATG",
+      "cdna": "GTGACTGGAGTTCAGACGTGTGCTCTTCCGATCTNNNNNNNNNNNCACAATCAKCACCTGCCATCTG",
+      "forward": "GCCTCCCTCGCGCCATCAGAGATGTGTATAAGAGACAGNNNNGCAGAAGTTATYCCAGCAGAAACA",
       "majority": 0,
       "end_join": true,
       "end_join_option": 2,
-      "overlap": 171,
+      "overlap": 3,
       "TCS_QC": true,
       "ref_genome": "HXB2",
-      "ref_start": 4384,
-      "ref_end": 4751,
+      "ref_start": 4509,
+      "ref_end": 5040,
       "indel": false,
       "trim": false
     },
