@@ -118,6 +118,7 @@ impl TcsConsensus {
     }
 }
 
+// TODO: need to remove low-quality reads (aka ambiguous reads) after consensus calling.
 pub fn build_from_filtered_pairs(
     pairs: &Vec<FilteredPair>,
     strategy: consensus::ConsensusStrategy,
@@ -195,7 +196,13 @@ pub fn build_from_filtered_pairs(
     let mut errors = Vec::new();
     for result in tcs_consensus_results {
         match result {
-            Ok(consensus) => tcs_consensus.push(consensus),
+            Ok(consensus) => {
+                if !consensus.r1_consensus.seq().contains(&b'N')
+                    && !consensus.r2_consensus.seq().contains(&b'N')
+                {
+                    tcs_consensus.push(consensus);
+                }
+            }
             Err(e) => errors.push(e.to_string()),
         }
     }

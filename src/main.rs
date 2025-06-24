@@ -38,7 +38,7 @@ fn main() {
             version,
             keep_original,
         } => {
-            let params_input_type = ParamsInputType::FromFilePath(version.clone());
+            let params_input_type = ParamsInputType::PresetID(version.clone().to_lowercase());
             tcs(
                 &input,
                 params_input_type,

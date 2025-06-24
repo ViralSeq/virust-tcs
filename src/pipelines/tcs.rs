@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::fs::{self, File, OpenOptions};
-use std::io::BufWriter;
+use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use chrono::Local;
@@ -36,6 +36,8 @@ pub fn tcs(
     tcs_report.set_advanced_settings(advanced_settings);
 
     // log the start of the TCS pipeline
+    writeln!(&mut logger, "\n")?; // Add a new line for better readability
+    logger.flush()?;
     log_line(&mut logger, "Starting TCS pipeline")?;
 
     // Run the TCS main function
@@ -56,8 +58,6 @@ pub fn tcs(
         };
 
     let success = tcs_report.is_successful();
-
-    // TODO: write the TCS report to a file
 
     if keep_original {
         log_line(&mut logger, "Keeping original files")?;
@@ -101,7 +101,6 @@ pub fn tcs(
 }
 
 // MARK: tcs main function
-//TODO: write details of the function
 
 pub fn tcs_main(
     mut tcs_report: TcsReport,
@@ -109,7 +108,7 @@ pub fn tcs_main(
     param: ParamsInputType,
     advanced_settings: AdvancedSettings,
 ) -> Result<(TcsReport, Option<(PathBuf, PathBuf)>), Box<dyn Error>> {
-    println!("{}", BANNER);
+    println!("\n{}\n", BANNER);
 
     let keep_original = *advanced_settings.keep_original();
     let steepness = *advanced_settings.steepness();
@@ -381,6 +380,7 @@ pub fn tcs_main(
         )?;
 
         // Build consensus for the region
+        // TODO: need to remove low-quality reads (aka ambiguous reads) after consensus calling.
         // This will call the TcsConsensus::build_from_filtered_pairs function to build the consensus sequence for the region.
         // We use Rayon to process the pairs in parallel.
         // We capture UMIDistError, if it occurs, we log it in the logger and add a warning to the TcsReport, and continue to the next region.
