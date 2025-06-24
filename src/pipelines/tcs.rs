@@ -3,8 +3,10 @@ use std::error::Error;
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use chrono::Local;
+use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 
 use crate::cli::BANNER;
@@ -26,6 +28,35 @@ pub fn tcs(
     steepness: f32,
     midpoint: u8,
 ) -> Result<(), Box<dyn Error>> {
+    println!("\n{}\n", BANNER);
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_style(
+        ProgressStyle::with_template("{spinner:.green.bold} {msg}")
+            .unwrap()
+            .tick_strings(&[
+                "🐱  🐭       ",
+                " 🐱  🐭      ",
+                "  🐱  🐭     ",
+                "   🐱  🐭    ",
+                "    🐱  🐭   ",
+                "     🐱  🐭  ",
+                "      🐱   🐭",
+                "        🐱🐭 ",
+                "       🐭  🐱",
+                "      🐭  🐱 ",
+                "     🐭  🐱  ",
+                "    🐭  🐱   ",
+                "   🐭  🐱    ",
+                "  🐭  🐱     ",
+                " 🐭  🐱      ",
+                "🐭  🐱       ",
+                " 🐭🐱        ",
+                "🐱🐭         ",
+            ]),
+    );
+    spinner.set_message("Initializing TCS pipeline...");
+    spinner.enable_steady_tick(Duration::from_millis(100));
+
     // initialize the TCS report and logger
     // this will create a new TCS report and a logger that will log the progress of the TCS pipeline.
     // the logger will log to a file named run_log.txt in the input directory.
@@ -76,7 +107,7 @@ pub fn tcs(
     tcs_sequence_data_write(&tcs_report, input)?;
     raw_sequence_invalid_reason_write(&tcs_report, input)?;
 
-    if success {
+    let final_message = if success {
         log_line(
             &mut logger,
             &format!(
@@ -84,19 +115,20 @@ pub fn tcs(
                 tcs_report.warnings().len()
             ),
         )?;
-        println!(
+        format!(
             "TCS pipeline completed successfully with \x1b[0;95m{} warning(s)\x1b[0m\n",
             tcs_report.warnings().len()
-        );
+        )
     } else {
         log_line(&mut logger, "TCS pipeline completed with errors\n")?;
-        println!(
+        format!(
             "TCS pipeline completed with \x1b[0;91m{} error(s)\x1b[0m and \x1b[0;95m{} warning(s)\x1b[0m\n",
             tcs_report.errors().len(),
             tcs_report.warnings().len()
-        );
-    }
+        )
+    };
 
+    spinner.finish_with_message(final_message);
     Ok(())
 }
 
@@ -108,8 +140,6 @@ pub fn tcs_main(
     param: ParamsInputType,
     advanced_settings: AdvancedSettings,
 ) -> Result<(TcsReport, Option<(PathBuf, PathBuf)>), Box<dyn Error>> {
-    println!("\n{}\n", BANNER);
-
     let keep_original = *advanced_settings.keep_original();
     let steepness = *advanced_settings.steepness();
     let midpoint = *advanced_settings.midpoint();
