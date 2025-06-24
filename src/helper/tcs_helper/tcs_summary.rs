@@ -66,11 +66,15 @@ pub struct RegionReportSummary {
     #[getset(get = "pub", set = "pub")]
     filtered_reads_for_region: usize,
     #[getset(get = "pub", set = "pub")]
+    passed_umis: usize,
+    #[getset(get = "pub", set = "pub")]
     tcs_number: usize,
     #[getset(get = "pub", set = "pub")]
     umi_cut_off: Option<usize>,
     #[getset(get = "pub", set = "pub")]
     distinct_to_raw_ratio: Option<f64>,
+    #[getset(get = "pub", set = "pub")]
+    resampling_index: Option<f64>,
     #[getset(get = "pub", set = "pub")]
     joined_tcs_number: usize,
     #[getset(get = "pub", set = "pub")]
@@ -82,9 +86,11 @@ impl RegionReportSummary {
         RegionReportSummary {
             region_name,
             filtered_reads_for_region: 0,
+            passed_umis: 0,
             tcs_number: 0,
             distinct_to_raw_ratio: None,
             umi_cut_off: None,
+            resampling_index: None,
             joined_tcs_number: 0,
             tcs_passed_qc_number: 0,
         }
@@ -108,11 +114,21 @@ impl RegionReportSummary {
 
         if let Some(umi_summary) = region_report.umi_summary() {
             let passed_umis = umi_summary.get_passed_umis_hashmap();
+            region_summary.set_passed_umis(passed_umis.len());
+
             let distinct_umis = passed_umis.len();
             if distinct_umis > 0 {
                 let ratio =
                     distinct_umis as f64 / *region_report.filtered_reads_for_region() as f64;
                 region_summary.set_distinct_to_raw_ratio(Some(ratio));
+
+                if passed_umis.len() > 0 {
+                    region_summary.set_resampling_index(Some(
+                        *region_summary.tcs_number() as f64 / passed_umis.len() as f64,
+                    ));
+                } else {
+                    region_summary.set_resampling_index(None);
+                }
             } else {
                 region_summary.set_distinct_to_raw_ratio(Some(0.0));
             }
