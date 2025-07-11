@@ -10,6 +10,7 @@ use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
 
+use crate::helper::json::FromJsonString;
 use crate::helper::umi::UMI;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -211,14 +212,6 @@ impl Params {
             email: None,
             primer_pairs: Vec::new(),
         }
-    }
-
-    /// Reads a JSON string and converts it into a `Params` struct.
-    /// This function uses the `serde_json` library to parse the JSON string.
-    /// It ignores extra fields in the JSON string that are not defined in the `Params` struct.
-    pub fn from_json_string(json_str: &str) -> Result<Self, serde_json::Error> {
-        let params = serde_json::from_str(json_str)?;
-        Ok(params)
     }
 
     /// Validate the parameters in the `Params` struct.

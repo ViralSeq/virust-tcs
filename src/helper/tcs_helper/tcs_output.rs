@@ -2,6 +2,7 @@ use super::*;
 
 use std::error::Error;
 use std::fs;
+use std::fs::File;
 use std::ops::Range;
 use std::path::Path;
 
@@ -153,6 +154,17 @@ pub fn tcs_sequence_data_write(tcs_report: &TcsReport, path: &str) -> Result<(),
 
         csv_writer.flush()?;
     }
+    Ok(())
+}
+
+pub fn export_input_params(
+    tcs_report: &TcsReport,
+    input_directory: &str,
+) -> Result<(), Box<dyn Error>> {
+    let params = tcs_report.input_params();
+    let params_file_path = Path::new(input_directory).join("tcs_params.json");
+    let params_file = File::create(params_file_path)?;
+    serde_json::to_writer_pretty(params_file, &params)?;
     Ok(())
 }
 

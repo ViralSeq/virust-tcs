@@ -2,6 +2,7 @@ use clap::Parser;
 use virust_tcs::cli::Args;
 use virust_tcs::cli::Commands;
 use virust_tcs::helper::*;
+use virust_tcs::pipelines::log::*;
 use virust_tcs::pipelines::params_generator;
 use virust_tcs::pipelines::tcs::*;
 
@@ -77,10 +78,12 @@ fn main() {
             // TODO: Call the function to run the SDRM pipeline here
             todo!();
         }
-        Commands::Log { input } => {
+        Commands::Log { input, output } => {
             println!("Running TCS log pipeline with input: {}", input);
-            // TODO: Call the function to run the log pipeline here
-            todo!();
+            run_log(input, output).unwrap_or_else(|err| {
+                eprintln!("Fatal Error: {} occurred during processing", err);
+                std::process::exit(1);
+            });
         }
     }
 }

@@ -1,5 +1,6 @@
-use std::fs::File;
-use std::io::BufReader;
+use std::fs::{self, File};
+use std::io::{self, BufReader};
+use std::path::Path;
 
 use bio::io::fastq::{self, Record};
 use flate2::read::MultiGzDecoder;
@@ -44,4 +45,52 @@ pub fn read_fastq_file(files: &FastqFiles) -> std::io::Result<Vec<(Record, Recor
         })
         .collect();
     Ok(pairs)
+}
+
+pub fn find_directories(input: &str) -> io::Result<Vec<std::path::PathBuf>> {
+    let input_path = Path::new(input);
+    if !input_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("Input path '{}' does not exist", input),
+        ));
+    }
+    if !input_path.is_dir() {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("Input path '{}' is not a directory", input),
+        ));
+    }
+
+    let mut dirs = Vec::new();
+    for entry in fs::read_dir(input_path)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            dirs.push(path);
+        }
+    }
+    Ok(dirs)
+}
+
+#[cfg(test)]
+
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_find_directories() {
+        let test_dir = "tests/data";
+        let result = find_directories(test_dir);
+        assert!(result.is_ok());
+        let dirs = result.unwrap();
+        assert!(!dirs.is_empty());
+        for dir in dirs {
+            println!(
+                "Found directory: {:?}",
+                dir.file_name().unwrap().to_string_lossy()
+            );
+            assert!(dir.is_dir());
+        }
+    }
 }

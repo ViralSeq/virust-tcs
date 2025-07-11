@@ -169,6 +169,35 @@ pub fn fastq_to_fasta_record(fq: &fastq::Record) -> fasta::Record {
     fasta::Record::with_attrs(fq.id(), fq.desc(), fq.seq())
 }
 
+pub static CLI_AMINATION_TICK_STRINGS: [&str; 26] = [
+    "🐱  🐭          ",
+    " 🐱  🐭         ",
+    "  🐱  🐭        ",
+    "   🐱  🐭       ",
+    "    🐱  🐭      ",
+    "     🐱  🐭     ",
+    "      🐱  🐭    ",
+    "       🐱  🐭   ",
+    "        🐱  🐭  ",
+    "         🐱  🐭 ",
+    "          🐱  🐭",
+    "           🐱🐭 ",
+    "           🐭 🐱",
+    "         🐭  🐱 ",
+    "        🐭  🐱  ",
+    "       🐭  🐱   ",
+    "      🐭  🐱    ",
+    "     🐭  🐱     ",
+    "    🐭  🐱      ",
+    "   🐭  🐱       ",
+    "  🐭  🐱        ",
+    " 🐭  🐱         ",
+    "🐭  🐱          ",
+    " 🐭🐱           ",
+    "🐱🐭            ",
+    "    🐱 ❤️  🐭    ",
+];
+
 /// This constant defines the threshold for low abundance in raw reads.
 /// It is set to 0.0005, which means that if the abundance of reads from one Region is less than 0.05% of the total raw reads, it will be considered low abundance.
 /// Potentially from cross-contamination in library preparation or sequencing.

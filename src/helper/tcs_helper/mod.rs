@@ -16,7 +16,7 @@ pub use filter_r1_r2::{
 
 pub use tcs_consensus::*;
 pub use tcs_output::TcsOutput;
-pub use tcs_output::tcs_sequence_data_write;
+pub use tcs_output::*;
 pub use tcs_qc::{QcAlgorithm, QcReference, TcsQcInput};
 pub use tcs_report::*;
 pub use tcs_report::{AdvancedSettings, RegionReport, TcsReport, TcsReportWarnings};

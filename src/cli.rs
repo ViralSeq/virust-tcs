@@ -91,6 +91,9 @@ pub enum Commands {
         /// Input directory path
         #[arg(short, long)]
         input: String,
+        /// Output directory path
+        #[arg(short, long)]
+        output: String,
     },
 }
 

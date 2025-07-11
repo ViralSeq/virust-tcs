@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::fs::File;
 use std::io::{BufWriter, Result as IoResult, Write};
-use std::path;
+use std::path::{self, PathBuf};
 
 use chrono::{DateTime, Local};
 use getset::{Getters, Setters};
@@ -23,6 +23,8 @@ pub struct TcsReportSummary {
     #[getset(get = "pub", set = "pub")]
     advanced_settings: AdvancedSettings,
     #[getset(get = "pub", set = "pub")]
+    total_reads: usize,
+    #[getset(get = "pub", set = "pub")]
     warnings: Vec<TcsReportWarnings>,
     #[getset(get = "pub", set = "pub")]
     region_summaries: Vec<RegionReportSummary>,
@@ -37,6 +39,7 @@ impl TcsReportSummary {
             current_version: env!("CARGO_PKG_VERSION").to_string(),
             input_directory: String::new(),
             advanced_settings: AdvancedSettings::default(),
+            total_reads: 0,
             warnings: Vec::new(),
             region_summaries: Vec::new(),
         }
@@ -48,6 +51,7 @@ impl TcsReportSummary {
         summary.set_process_end_time(*report.process_end_time());
         summary.set_input_directory(report.input_directory().to_owned());
         summary.set_advanced_settings(report.advanced_settings().clone());
+        summary.set_total_reads(*report.total_reads());
         summary.set_warnings(report.warnings().to_vec());
 
         for region_report in report.region_reports() {
@@ -56,6 +60,59 @@ impl TcsReportSummary {
         }
 
         summary
+    }
+
+    pub fn to_csv_string(&self) -> Result<String, Box<dyn Error>> {
+        let mut wtr = csv::Writer::from_writer(vec![]);
+
+        // Write headers
+        wtr.write_record(&[
+            "lib_name",
+            "region_name",
+            "total_reads",
+            "filtered_reads_for_region",
+            "passed_umis",
+            "tcs_number",
+            "umi_cut_off",
+            "distinct_to_raw_ratio",
+            "resampling_index",
+            "joined_tcs_number",
+            "tcs_passed_qc_number",
+        ])?;
+
+        for region in &self.region_summaries {
+            wtr.write_record(&[
+                PathBuf::from(self.input_directory.clone())
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned(),
+                region.region_name().to_string(),
+                self.total_reads.to_string(),
+                region.filtered_reads_for_region().to_string(),
+                region.passed_umis().to_string(),
+                region.tcs_number().to_string(),
+                region
+                    .umi_cut_off()
+                    .map(|x| x.to_string())
+                    .unwrap_or_default(),
+                region
+                    .distinct_to_raw_ratio()
+                    .map(|x| format!("{:.4}", x))
+                    .unwrap_or_default(),
+                region
+                    .resampling_index()
+                    .map(|x| format!("{:.4}", x))
+                    .unwrap_or_default(),
+                region.joined_tcs_number().to_string(),
+                region.tcs_passed_qc_number().to_string(),
+            ])?;
+        }
+
+        wtr.flush()?;
+        let data = wtr.into_inner()?; // Vec<u8>
+        let csv_string = String::from_utf8(data)?;
+        Ok(csv_string)
     }
 }
 

@@ -12,6 +12,7 @@ use rayon::prelude::*;
 use crate::cli::BANNER;
 use crate::helper::consensus::*;
 use crate::helper::io::read_fastq_file;
+use crate::helper::json::FromJsonString;
 use crate::helper::params::Params;
 use crate::helper::tcs_helper::*;
 
@@ -33,26 +34,7 @@ pub fn tcs(
     spinner.set_style(
         ProgressStyle::with_template("{spinner:.green.bold} {msg}")
             .unwrap()
-            .tick_strings(&[
-                "🐱  🐭       ",
-                " 🐱  🐭      ",
-                "  🐱  🐭     ",
-                "   🐱  🐭    ",
-                "    🐱  🐭   ",
-                "     🐱  🐭  ",
-                "      🐱   🐭",
-                "        🐱🐭 ",
-                "       🐭  🐱",
-                "      🐭  🐱 ",
-                "     🐭  🐱  ",
-                "    🐭  🐱   ",
-                "   🐭  🐱    ",
-                "  🐭  🐱     ",
-                " 🐭  🐱      ",
-                "🐭  🐱       ",
-                " 🐭🐱        ",
-                "🐱🐭         ",
-            ]),
+            .tick_strings(&CLI_AMINATION_TICK_STRINGS),
     );
     spinner.set_message("Initializing TCS pipeline...");
     spinner.enable_steady_tick(Duration::from_millis(100));
@@ -104,6 +86,7 @@ pub fn tcs(
     log_line(&mut logger, "Writing TCS report to file")?;
     tcs_report.set_process_end_time(Local::now());
     tcs_report_write(&tcs_report, &mut report_logger)?;
+    export_input_params(&tcs_report, input)?;
     tcs_sequence_data_write(&tcs_report, input)?;
     raw_sequence_invalid_reason_write(&tcs_report, input)?;
 
@@ -584,6 +567,7 @@ pub fn tcs_main(
     Ok((tcs_report, Some((r1_file.clone(), r2_file.clone()))))
 }
 
+//MARK: tcs_init function
 fn tcs_init(input: &str) -> Result<(TcsReport, BufWriter<File>, BufWriter<File>), Box<dyn Error>> {
     // Initialize the TCS report
     let mut tcs_report = TcsReport::new();
@@ -607,11 +591,7 @@ fn tcs_init(input: &str) -> Result<(TcsReport, BufWriter<File>, BufWriter<File>)
 
     let logger: BufWriter<File> = BufWriter::new(logfile);
 
-    let report_file = OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(input_dir.join("tcs_report.json"))?;
+    let report_file = File::create(input_dir.join("tcs_report.json"))?;
 
     let report_file = BufWriter::new(report_file);
 
@@ -619,7 +599,7 @@ fn tcs_init(input: &str) -> Result<(TcsReport, BufWriter<File>, BufWriter<File>)
 }
 
 // MARK: tcs_dr main function
-//TODO: write details of the function
+
 pub fn tcs_dr(
     input: &str,
     version: Option<String>,
