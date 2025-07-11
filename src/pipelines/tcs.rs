@@ -34,7 +34,7 @@ pub fn tcs(
     spinner.set_style(
         ProgressStyle::with_template("{spinner:.green.bold} {msg}")
             .unwrap()
-            .tick_strings(&CLI_AMINATION_TICK_STRINGS),
+            .tick_strings(&CLI_ANIMATION_TICK_STRINGS),
     );
     spinner.set_message("Initializing TCS pipeline...");
     spinner.enable_steady_tick(Duration::from_millis(100));

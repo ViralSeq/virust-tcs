@@ -95,6 +95,9 @@ pub enum Commands {
         #[arg(short, long)]
         output: String,
     },
+
+    /// TRY ME!!!
+    Tick {},
 }
 
 pub fn get_styles() -> Styles {

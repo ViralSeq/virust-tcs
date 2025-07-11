@@ -5,6 +5,7 @@ use virust_tcs::helper::*;
 use virust_tcs::pipelines::log::*;
 use virust_tcs::pipelines::params_generator;
 use virust_tcs::pipelines::tcs::*;
+use virust_tcs::pipelines::tick::*;
 
 fn main() {
     let args = Args::parse();
@@ -84,6 +85,9 @@ fn main() {
                 eprintln!("Fatal Error: {} occurred during processing", err);
                 std::process::exit(1);
             });
+        }
+        Commands::Tick {} => {
+            run_tick();
         }
     }
 }

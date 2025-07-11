@@ -169,7 +169,7 @@ pub fn fastq_to_fasta_record(fq: &fastq::Record) -> fasta::Record {
     fasta::Record::with_attrs(fq.id(), fq.desc(), fq.seq())
 }
 
-pub static CLI_AMINATION_TICK_STRINGS: [&str; 26] = [
+pub static CLI_ANIMATION_TICK_STRINGS: [&str; 26] = [
     "🐱  🐭          ",
     " 🐱  🐭         ",
     "  🐱  🐭        ",
