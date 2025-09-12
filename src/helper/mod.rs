@@ -1,5 +1,6 @@
 pub mod consensus;
 pub mod end_joining;
+pub mod fastqc;
 pub mod io;
 pub mod json;
 pub mod params;

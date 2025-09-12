@@ -20,6 +20,8 @@ pub struct TcsOutput<'a> {
     #[getset(get = "pub")]
     joined_tcs_passed_qc_fastq: Option<Vec<&'a fastq::Record>>,
     #[getset(get = "pub")]
+    joined_tcs_passed_qc_trimmed_fastq: Option<Vec<&'a fastq::Record>>,
+    #[getset(get = "pub")]
     qc_failed_reasons: Option<Vec<(String, QcNotPassedReport)>>,
 }
 
@@ -31,6 +33,7 @@ impl<'a> TcsOutput<'a> {
                 r2_fastq: Vec::new(),
                 joined_tcs_fastq: None,
                 joined_tcs_passed_qc_fastq: None,
+                joined_tcs_passed_qc_trimmed_fastq: None,
                 qc_failed_reasons: None,
             };
         }
@@ -39,6 +42,7 @@ impl<'a> TcsOutput<'a> {
         let mut r2_seqs = Vec::new();
         let mut joined_seqs = Vec::new();
         let mut joined_passed_qc_seqs = Vec::new();
+        let mut joined_passed_qc_trimmed_seqs = Vec::new();
         let mut qc_failed_reasons = Vec::new();
 
         for tcs in region_report.tcs_consensus_results().as_ref().unwrap() {
@@ -52,6 +56,9 @@ impl<'a> TcsOutput<'a> {
             if *tcs.qc() == TcsConsensusQcResult::Passed {
                 if let Some(joined) = tcs.joined_consensus() {
                     joined_passed_qc_seqs.push(joined);
+                }
+                if let Some(trimmed) = tcs.trimmed() {
+                    joined_passed_qc_trimmed_seqs.push(trimmed);
                 }
             }
             if let TcsConsensusQcResult::NotPassed(reason) = tcs.qc() {
@@ -71,6 +78,11 @@ impl<'a> TcsOutput<'a> {
                 None
             } else {
                 Some(joined_passed_qc_seqs)
+            },
+            joined_tcs_passed_qc_trimmed_fastq: if joined_passed_qc_trimmed_seqs.is_empty() {
+                None
+            } else {
+                Some(joined_passed_qc_trimmed_seqs)
             },
             qc_failed_reasons: if qc_failed_reasons.is_empty() {
                 None
@@ -115,6 +127,13 @@ pub fn tcs_sequence_data_write(tcs_report: &TcsReport, path: &str) -> Result<(),
         }
         if let Some(joined_passed_qc) = tcs_output.joined_tcs_passed_qc_fastq() {
             write_fastq_and_fasta(joined_passed_qc, &region_dir, "joined_passed_qc")?;
+        }
+        if let Some(joined_passed_qc_trimmed) = tcs_output.joined_tcs_passed_qc_trimmed_fastq() {
+            write_fastq_and_fasta(
+                joined_passed_qc_trimmed,
+                &region_dir,
+                "joined_passed_qc_trimmed",
+            )?;
         }
 
         let qc_failed_reasons_file = region_dir.join("qc_failed_reasons.csv");

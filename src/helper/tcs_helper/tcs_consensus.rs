@@ -118,7 +118,6 @@ impl TcsConsensus {
     }
 }
 
-// TODO: need to remove low-quality reads (aka ambiguous reads) after consensus calling.
 pub fn build_from_filtered_pairs(
     pairs: &Vec<FilteredPair>,
     strategy: consensus::ConsensusStrategy,
@@ -348,7 +347,7 @@ pub fn qc_and_trim_consensus_fastq_vec(
                                     ),
                                     None,
                                     &trimmed.0,
-                                    &joined_qual[trimmed.1], // Use the range from the locator to get the quality scores
+                                    &joined_qual[trimmed.1], // TODO: need to fix the range here (it is not correct if there are gaps in the locator
                                 )));
                             }
                             Err(e) => {

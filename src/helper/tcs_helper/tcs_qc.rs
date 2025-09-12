@@ -46,7 +46,7 @@ impl TcsQcInput {
         }
     }
 
-    pub fn run_locator(&self) -> Result<TcsQcOutput, Box<dyn Error + Send + Sync>> {
+    pub fn run_locator(&'_ self) -> Result<TcsQcOutput<'_>, Box<dyn Error + Send + Sync>> {
         let args = self.to_locator_args();
         let locator = Locator::build(&args)?;
         let mut query_locator_hashmap: HashMap<&[u8], Option<Locator>> = HashMap::new();

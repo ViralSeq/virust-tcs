@@ -136,6 +136,7 @@ pub struct RegionReportSummary {
     joined_tcs_number: usize,
     #[getset(get = "pub", set = "pub")]
     tcs_passed_qc_number: usize,
+    // add a field of detection sensitivity
 }
 
 impl RegionReportSummary {

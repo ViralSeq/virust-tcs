@@ -131,12 +131,12 @@ pub fn trim_sequence_from_locator(
         }
     }
 
-    // TODO: implement error handling for cases where g1 or g2 exceed the length of query_aligned
+    // implement error handling for cases where g1 or g2 exceed the length of query_aligned
     if g1 >= query_aligned.len() || g2 >= query_aligned.len() || (g1 + g2) > query_aligned.len() {
         return Err("Gaps exceed the length of the aligned query sequence.".into());
     }
 
-    let trimmed_seq = query_aligned[g1..query_aligned.len() - g2]
+    let trimmed_seq: Vec<u8> = query_aligned[g1..query_aligned.len() - g2]
         .iter()
         .cloned()
         .filter(|&c| c != b'-') // Remove gaps
@@ -148,8 +148,10 @@ pub fn trim_sequence_from_locator(
         .filter(|&&c| c != b'-')
         .count();
 
-    let trimmed_range = prefix..(query_aligned.len() - suffix);
-    Ok((trimmed_seq, trimmed_range))
+    let query_length_without_gaps = query_aligned.iter().filter(|&&c| c != b'-').count();
+
+    let trimmed_range = prefix..(query_length_without_gaps - suffix);
+    Ok((trimmed_seq, trimmed_range)) // Seems ok now. May come back to fix later if any issue arises.
 }
 
 pub fn reverse_complement(record: &Record) -> Record {
@@ -276,6 +278,30 @@ mod tests {
 
         assert_eq!(trimmed_str.to_string(), pr);
         assert_eq!(trimmed_range, 10..307);
+    }
+
+    #[test]
+    fn test_trim_sequence_from_locator_with_gaps_2() {
+        let seq = "CCAGAAGAGAGCTTCAGGTTTGGGGAGGAGACAACAACTCCCCCTCAGAAGCAGGAGCGGGAAGACAAGGAAATGTATCCCTTAGCTTCCCTCAGATCACTCTTTGGCAACGACCCCTCGTCACAATAAAGATAGGGGGGCAACTAAAGGAGGCTCTATTAGATACAGGAGCAGATGATACAGTATTAGAAGAAATGAATTTGCCAGGCAGATGGAAACCAAAAATGATAGGGGGAATTGGAGGTTTTATCAAAGTAAGACAGTATGATGTTAGGGGGAATTGGAGGTTTTATCAAAGTAAGACAGTATGATCAGATACCCATAGAAATCTGTGCACATAAAGCTATTGGTACAGTATTAGTAGGACCTACACCTGTCTAAATTTTCCCTTTAGTCCTATTGAAACTGTACCAGTAAAATTAAAGCCA";
+        let pr = "CCTCAGGTCACTCTTTGGCAACGACCCCTCGTCACAATAAAGATAGGGGGGCAACTAAAGGAAGCTCTATTAGATACAGGAGCAGATGATACAGTATTAGAAGAAATGAGTTTGCCAGGAAGATGGAAACCAAAAATGATAGGGGGAATTGGAGGTTTTATCAAAGTAAGACAGTATGATCAGATACTCATAGAAATCTGTGGACATAAAGCTATAGGTACAGTATTAGTAGGACCTACACCTGTCAACATAATTGGAAGAAATCTGTTGACTCAGATTGGTTGCACTTTAAATTTT".to_string();
+        let args = Args {
+            query: vec![seq.to_string()],
+            reference: "HXB2".to_string(),
+            type_query: "nt".to_string(),
+            algorithm: 1,
+        };
+
+        let locator = Locator::build(&args).unwrap().pop().unwrap().unwrap();
+
+        let trimmed = trim_sequence_from_locator(&locator, 2253, 2549).unwrap();
+
+        let trimmed_str = String::from_utf8_lossy(&trimmed.0);
+
+        let trimmed_range = trimmed.1;
+
+        assert_eq!(trimmed_str.len(), pr.len());
+        // assert_eq!(trimmed_str.to_string(), pr);
+        assert_eq!(trimmed_range, 89..(89 + pr.len()));
     }
 
     #[test]
