@@ -11,6 +11,7 @@ use flate2::write::GzEncoder;
 use crate::helper::fastqc;
 use crate::helper::io::find_directories;
 use crate::helper::json::FromJsonString;
+use crate::helper::params::Params;
 use crate::helper::tcs_helper::*;
 
 pub fn run_log(input: String, output: String) -> Result<(), Box<dyn Error>> {
@@ -64,13 +65,19 @@ pub fn run_log(input: String, output: String) -> Result<(), Box<dyn Error>> {
 
         summaries.push(tcs_summary);
 
+        let params =
+            Params::from_json_string(&std::fs::read_to_string(dir.join("tcs_params.json"))?)?;
+
         // get directorys from this path
         let subdirectories = find_directories(dir.to_str().unwrap())?;
         for subdir in subdirectories {
             let region_name = subdir.file_name().unwrap().to_string_lossy();
-            let joined_fastq_name = find_fastq(&subdir, "joined_passed_qc_trimmed.fastq")
-                .or_else(|| find_fastq(&subdir, "joined_passed_qc.fastq"))
-                .or_else(|| find_fastq(&subdir, "joined.fastq"));
+            let joined_fastq_name = determine_joined_tcs_file_from_params(&params, &region_name);
+            if joined_fastq_name.is_none() {
+                println!("Region: {}, No joined FASTQ found", region_name);
+                continue;
+            }
+            let joined_fastq_name = find_fastq(&subdir, &joined_fastq_name.unwrap());
 
             if let Some(joined_fastq) = joined_fastq_name {
                 let fastq_reader = fastq::Reader::from_file(&joined_fastq)?;
@@ -157,6 +164,21 @@ fn find_fastq(root: &PathBuf, target_name: &str) -> Option<PathBuf> {
     }
 }
 
+fn determine_joined_tcs_file_from_params(params: &Params, region_name: &str) -> Option<String> {
+    for region_param in &params.primer_pairs {
+        if region_param.region == region_name {
+            if region_param.trim {
+                return Some("joined_passed_qc_trimmed.fastq".to_string());
+            } else if region_param.tcs_qc {
+                return Some("joined_passed_qc.fastq".to_string());
+            } else {
+                return Some("joined.fastq".to_string());
+            }
+        }
+    }
+    None
+}
+
 fn compress_fastq_gz(input: &PathBuf) -> Result<(), Box<dyn Error>> {
     let mut output = input.clone();
     output.set_extension("fastq.gz");
@@ -170,6 +192,19 @@ fn compress_fastq_gz(input: &PathBuf) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-// TODO: plot the quality of r1 r2 and combined reads (if available)
-// TODO: return the originals compressed (fastq.gz or fasta.gz)
-// TODO:only keep the joined reads in a separate folder (uncompressed)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_determine_joined_tcs_file_from_params() {
+        let path_to_params = "tests/data/pr.json";
+        let params =
+            Params::from_json_string(&std::fs::read_to_string(path_to_params).unwrap()).unwrap();
+        let region_name = "PR";
+        let result = determine_joined_tcs_file_from_params(&params, region_name);
+
+        assert!(result.is_some());
+        assert_eq!(result.unwrap(), "joined_passed_qc_trimmed.fastq");
+    }
+}

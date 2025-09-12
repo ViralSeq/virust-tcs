@@ -11,7 +11,7 @@
       "end_join_option": 3,
       "TCS_QC": true,
       "ref_genome": "HXB2",
-      "ref_start": 2160,
+      "ref_start": 2150,
       "ref_start_lower": 2170,
       "ref_end": 2591,
       "indel": true,
