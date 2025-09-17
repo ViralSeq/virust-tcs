@@ -1,9 +1,12 @@
 pub mod consensus;
+pub mod drm_helper;
 pub mod end_joining;
 pub mod fastqc;
 pub mod io;
 pub mod json;
+pub mod muscle;
 pub mod params;
+pub mod r;
 pub mod tcs_helper;
 pub mod umi;
 pub mod umis;
