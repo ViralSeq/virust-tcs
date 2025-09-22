@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TCS Log</title>
+    <script src="https://www.gstatic.com/charts/loader.js"></script>
+    <script src="./log.js"></script>
+    <link rel="stylesheet" href="./log.css">
+</head>
+
+<body>
+    <!-- visible page -->
+    <div id="page_container">
+        <div id="nav" class="card"></div>
+        <div style="display: flex; flex-direction: column; flex-grow: 1;">
+            <div style="width: 100%; text-align: center;">
+                <h1 id="chart_error_message"></h1>
+            </div>
+            <div id="page_content"></div>
+        </div>
+    </div>
+    <!-- templates -->
+    <div id="templates" class="hidden">
+        <div class="page_main flex">
+            <div class="card">
+                <table id="home-table">
+                    <tr>
+                        <td>Batch Name</td>
+                        <td id="batch_name"></td>
+                    </tr>
+                    <tr>
+                        <td>Processed Time</td>
+                        <td id="processed_time"></td>
+                    </tr>
+                    <tr>
+                        <td>TCS Version</td>
+                        <td id="tcs_version"></td>
+                    </tr>
+                    <tr>
+                        <td>viral_seq Version</td>
+                        <td id="viral_seq_version"></td>
+                    </tr>
+                    <tr>
+                        <td>Number of Libraries</td>
+                        <td id="number_of_libraries"></td>
+                    </tr>
+                    <tr>
+                        <td>Total Reads</td>
+                        <td id="total_reads"></td>
+                    </tr>
+                </table>
+            </div>
+            <div class="card">
+                <h2>Raw Sequences Distribution</h2>
+                <div id="raw-sequence-chart"></div>
+            </div>
+        </div>
+        <div class="page_lib" style="display: flex; flex-direction: column; gap: 20px;">
+            <div class="card">
+                <h2>Distribution of Raw Sequencing Reads</h2>
+                <div id="raw_distribution"></div>
+            </div>
+            <div class="card flex" style="flex-direction: row;">
+                <div class="flex-1">
+                    <h2>Raw Sequence Analysis</h2>
+                    <div id="raw_sequence_analysis"></div>
+                </div>
+                <div id="drilldown_container" class="flex-1">
+                    <h2 id="drilldown_label"></h2>
+                    <div id="raw_sequence_analysis_drilldown"></div>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Number of TCS at Regions</h2>
+                <div id="number_at_regions"></div>
+            </div>
+            <div class="card">
+                <h2>Detection Sensitivity</h2>
+                <p><i>The lowest abundance of minority mutations that can be detected with 95% confidence</i></p>
+                <div id="detection_sensitivity"></div>
+            </div>
+            <div class="card">
+                <h2>Distinct to Raw</h2>
+                <p><i>Distinct to Raw greater than 0.1 suggests more raw sequences are required to fully recover TCS</i>
+                </p>
+                <div id="distinct_to_raw"></div>
+            </div>
+            <div class="card">
+                <h2>Resampling Index</h2>
+                <p><i>Resampling index less than 0.9 suggests Primer ID resampling</i></p>
+                <div id="resampling_index"></div>
+            </div>
+            <div class="card">
+                <h2>Primer ID Bin Size Distribution</h2>
+                <div id="size_distribution"></div>
+            </div>
+        </div>
+    </div>
+</body>
+
+</html>

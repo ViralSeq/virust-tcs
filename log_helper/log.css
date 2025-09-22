@@ -1,0 +1,89 @@
+.card {
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 2px 2px 12px rgba(0, 0, 0, 0.1);
+  background-color: #fff;
+}
+
+.flex {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.flex-1 {
+  flex: 1;
+  min-width: 0;
+}
+
+.current_page {
+  font-weight: bold;
+  text-decoration: underline !important;
+  /* color: #007bff !important; */
+}
+
+.hidden {
+  display: none;
+  visibility: hidden;
+}
+
+#nav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 20px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #ddd;
+  min-width: 150px;
+}
+
+#nav > * {
+  text-decoration: none;
+  color: black;
+  cursor: pointer;
+}
+
+#nav > *:hover {
+  text-decoration: none;
+  color: #007bff;
+  cursor: pointer;
+}
+
+#page_container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  gap: 20px;
+}
+
+#page_content {
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.page_lib {
+  padding-bottom: 20px;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  font-size: 1.2rem;
+  background-color: #f4f4f4;
+  color: #333;
+}
+
+table {
+  margin: 10px auto;
+  width: 80%;
+  border-collapse: collapse;
+}
+table,
+table th,
+table td {
+  border: 1px solid black;
+}
+table td {
+  padding: 8px;
+}
