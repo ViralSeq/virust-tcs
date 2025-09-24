@@ -9,7 +9,6 @@ pub struct LibData {
     pub raw_distribution: RawDistribution, // Vec<(String, u32)>
     pub raw_sequence_analysis: RawSequenceAnalysis, // Vec<(String, u32)> + drilldowns
     pub number_at_regions: NumberAtRegions, // Vec<(String, u32, u32, u32)>
-    pub detection_sensitivity: RegionF32Table, // Vec<(String, f32)>
     pub distinct_to_raw: RegionF32Table, // Vec<(String, f32)>
     pub resampling_index: RegionF32Table, // Vec<(String, f32)>
     pub size_distribution: SizeDistribution, // Map<String, Vec<(u32, Option<f32>, Option<u32>)>>
@@ -34,7 +33,7 @@ pub struct DrilldownU32 {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NumberAtRegions {
-    pub data: Vec<(String, u32, u32, u32)>, // (region, tcs, combined_tcs, tcs_after_qc)
+    pub data: Vec<(String, Option<u32>, Option<u32>, Option<u32>)>, // (region, tcs, combined_tcs, tcs_after_qc)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

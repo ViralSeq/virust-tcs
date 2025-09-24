@@ -9,8 +9,95 @@ hold charts globally to destroy on page change
 
 */
 
-// var currentLib = null;
-var currentLib = "RV95";
+var currentLib = null;
+// var currentLib = "TEST_DATA";
+
+let { main_data, lib_data } = app_data;
+
+// insert test data if no data
+if (!main_data.batch_name) {
+  main_data = {
+    batch_name: "test_batch",
+    process_start_time: "2025-07-10T15:18:45.424586-04:00",
+    process_end_time: "2025-07-10T15:18:45.692173-04:00",
+    current_version: "0.1.0",
+    viral_seq_version: "2.0.0",
+    number_of_libraries: 2,
+    total_reads: 20000,
+    raw_sequence_data: [
+      ["RV95", 20000],
+      ["Other", 2000],
+    ],
+  };
+
+  lib_data = {
+    TEST_DATA: {
+      raw_distribution: {
+        data: [
+          ["PR", 5000],
+          ["V1V3", 3000],
+          ["Other", 2000],
+        ],
+      },
+      raw_sequence_analysis: {
+        data: [
+          ["GeneralFilterFailed", 2256],
+          ["NoMatch", 270],
+        ],
+        drilldowns: [
+          {
+            label: "GeneralFilterFailed",
+            data: [
+              ["IN", 143],
+              ["PR", 88],
+            ],
+          },
+          {
+            label: "NoMatch",
+            data: [
+              ["IN", 100],
+              ["PR", 100],
+            ],
+          },
+        ],
+      },
+      number_at_regions: {
+        data: [
+          ["VIF", 1730, null, 1711],
+          ["V1V3", 1500, 1600, 1700],
+        ],
+      },
+      distinct_to_raw: {
+        data: [
+          ["IN", 0.007],
+          ["PR", 0.003],
+        ],
+      },
+      resampling_index: {
+        data: [
+          ["IN", 0.007],
+          ["PR", 0.003],
+        ],
+      },
+      size_distribution: {
+        data: {
+          PR: [
+            [0, null, 0],
+            [0, null, 100],
+            [1, 5, null],
+            [2, 10, null],
+          ],
+          IN: [
+            [0, null, 0],
+            [0, null, 100],
+            [1, 5, null],
+            [2, 10, null],
+          ],
+        },
+      },
+    },
+  };
+}
 
 var charts = [];
 
@@ -21,113 +108,11 @@ google.charts.setOnLoadCallback(() => {
 });
 
 var pie_chart_default_options = {
-  // titleTextStyle: { fontSize: 18 },
-  // pieSliceText: "label",
   legend: { position: "left", alignment: "center" },
-  // chartArea: { width: "100%", height: "100%" },
-  sliceVisibilityThreshold: 0.005, // 0.5%
+  sliceVisibilityThreshold: 0.005,
   pieResidueSliceLabel: "Other",
   animation: { duration: 300, easing: "out" },
-};
-
-var main_data = {
-  batch_name: "test_batch",
-  process_start_time: "2025-07-10T15:18:45.424586-04:00",
-  process_end_time: "2025-07-10T15:18:45.692173-04:00",
-  current_version: "0.1.0",
-  viral_seq_version: "2.0.0",
-  number_of_libraries: 2,
-  total_reads: 20000,
-  raw_sequence_data: [
-    ["RV95", 20000],
-    ["Other", 2000],
-  ],
-};
-
-var colors = [
-  "#332288",
-  "#117733",
-  "#44AA99",
-  "#88CCEE",
-  "#DDCC77",
-  "#CC6677",
-  "#AA4499",
-  "#882255",
-];
-var bool_colors = { true: colors[3], false: colors[5] };
-
-var lib_data = {
-  RV95: {
-    raw_distribution: {
-      data: [
-        ["PR", 5000],
-        ["V1V3", 3000],
-        ["Other", 2000],
-      ],
-    },
-    raw_sequence_analysis: {
-      data: [
-        ["GeneralFilterFailed", 2256],
-        ["NoMatch", 270],
-      ],
-      drilldowns: [
-        {
-          label: "GeneralFilterFailed",
-          data: [
-            ["IN", 143],
-            ["PR", 88],
-          ],
-        },
-        {
-          label: "NoMatch",
-          data: [
-            ["IN", 100],
-            ["PR", 100],
-          ],
-        },
-      ],
-    },
-    number_at_regions: {
-      data: [
-        ["VIF", 1730, 1711, 1690],
-        ["V1V3", 1500, 1600, 1700],
-      ],
-    },
-    detection_sensitivity: {
-      data: [
-        ["V1V3", 0.3],
-        ["PR", 0.5],
-      ],
-    },
-    distinct_to_raw: {
-      data: [
-        ["IN", 0.007],
-        ["PR", 0.003],
-      ],
-    },
-    resampling_index: {
-      data: [
-        ["IN", 0.007],
-        ["PR", 0.003],
-      ],
-    },
-    size_distribution: {
-      data: {
-        PR: [
-          [0, null, 0],
-          [0, null, 100],
-          [1, 5, null],
-          [2, 10, null],
-        ],
-        IN: [
-          [0, null, 0],
-          [0, null, 100],
-          [1, 5, null],
-          [2, 10, null],
-        ],
-      },
-    },
-  },
+  pieHole: 0.4,
 };
 
 // MARK: Navigation
@@ -161,7 +146,6 @@ function generateMainPage() {
   var pageBasicStatistics = document.querySelector("#templates .page_main");
   pageContent.innerHTML = pageBasicStatistics.outerHTML;
 
-  // set table fields
   pageContent.querySelector("#batch_name").innerText = main_data["batch_name"];
   pageContent.querySelector("#processed_time").innerText =
     main_data["process_end_time"];
@@ -174,7 +158,6 @@ function generateMainPage() {
   pageContent.querySelector("#total_reads").innerText =
     main_data["total_reads"];
 
-  // generate chart
   var element = pageContent.querySelector("#raw-sequence-chart");
   var home_chart = new google.visualization.ColumnChart(element);
   home_chart.draw(
@@ -184,7 +167,6 @@ function generateMainPage() {
     ]),
     {
       annotations: { alwaysOutside: true },
-      //   colors: [bool_colors[true]],
     },
   );
   charts.push(home_chart);
@@ -192,7 +174,6 @@ function generateMainPage() {
 
 // MARK: Lib Page
 function generateLibPage(pageID) {
-  //set each chart
   var pageContent = document.getElementById("page_content");
   var data = lib_data[pageID];
 
@@ -200,16 +181,16 @@ function generateLibPage(pageID) {
     "#templates .page_lib",
   ).outerHTML;
 
-  // MARK: Raw Distribution
   var raw_distribution = new google.visualization.PieChart(
     pageContent.querySelector("#raw_distribution"),
   );
 
-  let raw_distribution_options = pie_chart_default_options;
-
-  // if (true) {
-  //     raw_distribution_options.pieResidueSliceLabel = ""
-  // }
+  let raw_distribution_options = {
+    ...pie_chart_default_options,
+    colors: data["raw_distribution"]["data"].map(function (r) {
+      return getRegionColor(r[0]);
+    }),
+  };
 
   raw_distribution.draw(
     google.visualization.arrayToDataTable([
@@ -220,7 +201,6 @@ function generateLibPage(pageID) {
   );
   charts.push(raw_distribution);
 
-  // MARK: Raw Sequence Analysis
   var rsaData = google.visualization.arrayToDataTable([
     ["Categories", "Reason"],
     ...data["raw_sequence_analysis"]["data"],
@@ -228,10 +208,21 @@ function generateLibPage(pageID) {
   var raw_sequence_analysis = new google.visualization.PieChart(
     pageContent.querySelector("#raw_sequence_analysis"),
   );
-  raw_sequence_analysis.draw(rsaData, pie_chart_default_options);
+  var parentLabels = data["raw_sequence_analysis"]["data"].map(function (r) {
+    return r[0];
+  });
+  var parentColorByLabel = {};
+  parentLabels.forEach(function (label) {
+    parentColorByLabel[label] = getRegionColor(label);
+  });
+  raw_sequence_analysis.draw(rsaData, {
+    ...pie_chart_default_options,
+    colors: parentLabels.map(function (l) {
+      return parentColorByLabel[l];
+    }),
+  });
   charts.push(raw_sequence_analysis);
 
-  // MARK: Drilldowns
   if (data["raw_sequence_analysis"]["drilldowns"].length) {
     var raw_sequence_analysis_drilldown = new google.visualization.PieChart(
       pageContent.querySelector("#raw_sequence_analysis_drilldown"),
@@ -244,7 +235,6 @@ function generateLibPage(pageID) {
     pageContent.querySelector("#drilldown_label").innerHTML =
       "Raw Sequence Analysis > " + drilldown_data.label;
 
-    // add click event listener to get the key of raw_sequence_analysis pie slice clicked
     google.visualization.events.addListener(
       raw_sequence_analysis,
       "select",
@@ -264,18 +254,22 @@ function generateLibPage(pageID) {
       },
     );
 
-    function setDrilldownPieChart(data, label) {
+    function setDrilldownPieChart(dataRows, label) {
       pageContent.querySelector("#drilldown_label").innerHTML =
         "Raw Sequence Analysis > " + label;
+
+      var base = parentColorByLabel[label] || "#8888ee";
+      var shades = gradientShades(base, dataRows.length || 2);
 
       raw_sequence_analysis_drilldown.draw(
         google.visualization.arrayToDataTable([
           ["Categories", "Reason"],
-          ...data,
+          ...dataRows,
         ]),
         {
           title: label,
           ...pie_chart_default_options,
+          colors: shades,
         },
       );
     }
@@ -283,7 +277,6 @@ function generateLibPage(pageID) {
     pageContent.querySelector("#drilldown_container").outerHTML = "";
   }
 
-  // MARK: Number at TCS Regions
   var number_at_regions = new google.charts.Bar(
     pageContent.querySelector("#number_at_regions"),
   );
@@ -292,68 +285,42 @@ function generateLibPage(pageID) {
       ["Region", "TCS", "Combined TCS", "TCS After QC"],
       ...data["number_at_regions"]["data"],
     ]),
+    {
+      colors: [ggplotPalette[0], ggplotPalette[1], ggplotPalette[2]],
+    },
   );
   charts.push(number_at_regions);
 
-  // MARK: Detection Sensitivity
-  var detection_sensitivity = new google.visualization.ColumnChart(
-    pageContent.querySelector("#detection_sensitivity"),
-  );
-  detection_sensitivity.draw(
-    google.visualization.arrayToDataTable([
-      ["Region", "Detection Sensitivity"],
-      ...data["detection_sensitivity"]["data"],
-    ]),
-    {
-      legend: {
-        position: "none",
-      },
-      vAxis: {
-        scaleType: "log",
-        viewWindow: {
-          min: 0.00001,
-        },
-        ticks: [0.00001, 0.0001, 0.001, 0.01, 0.1, 1],
-      },
-    },
-  );
-  charts.push(detection_sensitivity);
-
-  // MARK: Distinct To Raw
   var distinct_to_raw = new google.visualization.ColumnChart(
     pageContent.querySelector("#distinct_to_raw"),
   );
-  distinct_to_raw.draw(
-    google.visualization.arrayToDataTable([
-      ["Region", "Distinct to Raw"],
-      ...data["distinct_to_raw"]["data"],
-    ]),
-    {
-      legend: {
-        position: "none",
-      },
-    },
+  var dtrRows = [["Region", "Distinct to Raw", { role: "style" }]].concat(
+    data["distinct_to_raw"]["data"].map(function (r) {
+      return [r[0], r[1], getRegionColor(r[0])];
+    }),
   );
+  distinct_to_raw.draw(google.visualization.arrayToDataTable(dtrRows), {
+    legend: {
+      position: "none",
+    },
+  });
   charts.push(distinct_to_raw);
 
-  // MARK: Resampling Index
   var resampling_index = new google.visualization.ColumnChart(
     pageContent.querySelector("#resampling_index"),
   );
-  resampling_index.draw(
-    google.visualization.arrayToDataTable([
-      ["Region", "Resampling Index"],
-      ...data["resampling_index"]["data"],
-    ]),
-    {
-      legend: {
-        position: "none",
-      },
-    },
+  var riRows = [["Region", "Resampling Index", { role: "style" }]].concat(
+    data["resampling_index"]["data"].map(function (r) {
+      return [r[0], r[1], getRegionColor(r[0])];
+    }),
   );
+  resampling_index.draw(google.visualization.arrayToDataTable(riRows), {
+    legend: {
+      position: "none",
+    },
+  });
   charts.push(resampling_index);
 
-  // MARK: Size Distribution
   var size_distribution_container =
     pageContent.querySelector("#size_distribution");
 
@@ -373,6 +340,8 @@ function generateLibPage(pageID) {
         ...regionData,
       ]),
     );
+    var base = getRegionColor(region);
+    var shade = gradientShades(base, 2)[1];
     size_distribution.draw(view, {
       pointSize: 5,
       title: region,
@@ -381,15 +350,11 @@ function generateLibPage(pageID) {
         title: "# of PIDs ",
         logScale: true,
       },
-      // colors: ["' + bool_colors[true] + '"],
       legend: "none",
       seriesType: "scatter",
       series: {
-        1: {
-          type: "line",
-          // color: "' + bool_colors[false] + '",
-          pointsVisible: false,
-        },
+        0: { color: base },
+        1: { type: "line", pointsVisible: false, color: shade },
       },
     });
 
@@ -403,8 +368,6 @@ function showPage(pageID) {
   document.getElementById("chart_error_message").innerHTML = "";
 
   currentLib = pageID;
-
-  console.log({ pageID });
 
   try {
     if (pageID == null) {
@@ -424,23 +387,37 @@ function showPage(pageID) {
 // MARK: Coloring
 
 var regionColors = {
-  PR: "#1f77b4", // blue
-  IN: "#ff7f0e", // orange
-  V1V3: "#2ca02c", // green
-  VIF: "#9467bd", // purple
-  // "Other" not fixed → falls back to random
+  PR: "#F8766D", // red
+  IN: "#7CAE00", // green
+  V1V3: "#00BFC4", // cyan/blue
+  VIF: "#C77CFF", // purple
+  GAG: "#E68613", // orange
+  NEF: "#00A9FF", // light blue
+  POL: "#52B415", // lime
+  ENV: "#FF61CC", // pink
+  Other: "#999999", // gray fallback
 };
+
+var ggplotPalette = [
+  "#F8766D",
+  "#7CAE00",
+  "#00BFC4",
+  "#C77CFF",
+  "#E68613",
+  "#00A9FF",
+  "#52B415",
+  "#FF61CC",
+];
 
 function getRegionColor(region) {
   if (regionColors[region]) return regionColors[region];
-  if (region === "Other") {
-    // cache one random value so "Other" looks the same across charts
-    if (!regionColors.Other) regionColors.Other = randomHex();
-    return regionColors.Other;
-  }
-  // unknown region fallback
-  if (!regionColors[region]) regionColors[region] = randomHex();
-  return regionColors[region];
+  if (region === "Other") return regionColors.Other;
+  // cycle through palette if unknown region
+  var keys = Object.keys(regionColors);
+  var index = keys.length % ggplotPalette.length;
+  var color = ggplotPalette[index];
+  regionColors[region] = color;
+  return color;
 }
 
 function hexToHsl(hex) {
@@ -462,7 +439,7 @@ function hexToHsl(hex) {
     l = (max + min) / 2;
 
   if (max === min) {
-    h = s = 0; // achromatic
+    h = s = 0;
   } else {
     const d = max - min;
     s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
@@ -482,12 +459,49 @@ function hexToHsl(hex) {
   return { h: h * 360, s: s, l: l };
 }
 
+function hslToHex(h, s, l) {
+  h /= 360;
+  const hue2rgb = (p, q, t) => {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  };
+  let r, g, b;
+  if (s === 0) {
+    r = g = b = l;
+  } else {
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+  }
+  const toHex = (x) =>
+    Math.round(x * 255)
+      .toString(16)
+      .padStart(2, "0");
+  return "#" + toHex(r) + toHex(g) + toHex(b);
+}
+
 function gradientShades(hex, steps = 4) {
   const hsl = hexToHsl(hex);
   const shades = [];
   for (let i = 0; i < steps; i++) {
-    const factor = (i / (steps - 1)) * 0.5; // 0 → base, 0.5 → lighter
-    shades.push(d3.hsl(hsl.h, hsl.s, Math.min(1, hsl.l + factor)).formatHex());
+    const factor = (i / Math.max(1, steps - 1)) * 0.5;
+    const l = Math.min(1, Math.max(0, hsl.l + factor));
+    shades.push(hslToHex(hsl.h, hsl.s, l));
   }
   return shades;
+}
+
+function randomHex() {
+  return (
+    "#" +
+    Math.floor(Math.random() * 16777215)
+      .toString(16)
+      .padStart(6, "0")
+  );
 }
