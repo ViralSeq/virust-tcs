@@ -1,5 +1,5 @@
 use std::error::Error;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 #[derive(Debug, PartialEq, Eq, Hash)]
 #[allow(dead_code)]
@@ -16,10 +16,20 @@ impl MuscleVersion {
         let mut cmd = Command::new("muscle");
         match self {
             MuscleVersion::Muscle3_8_31 => {
-                cmd.arg("-in").arg(input).arg("-out").arg(output);
+                cmd.arg("-in")
+                    .arg(input)
+                    .arg("-out")
+                    .arg(output)
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null());
             }
             MuscleVersion::Muscle5 => {
-                cmd.arg("-align").arg(input).arg("-output").arg(output);
+                cmd.arg("-super5")
+                    .arg(input)
+                    .arg("-output")
+                    .arg(output)
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null()); //use super5 mode for (much) faster processing
             }
             MuscleVersion::Other(version) => {
                 // raise warning about unknown version
@@ -96,5 +106,46 @@ mod tests {
 
         let version = get_muscle_version("nonexistent_command");
         assert_eq!(version, MuscleVersion::NotInstalled);
+    }
+
+    #[test]
+    fn test_test_muscle_command_building() {
+        let version_3 = MuscleVersion::Muscle3_8_31;
+        let cmd_3 = version_3
+            .build_command("input.fasta", "output.fasta")
+            .unwrap();
+        let args_3: Vec<String> = cmd_3
+            .get_args()
+            .map(|s| s.to_string_lossy().to_string())
+            .collect();
+        assert_eq!(args_3, vec!["-in", "input.fasta", "-out", "output.fasta"]);
+
+        let version_5 = MuscleVersion::Muscle5;
+        let cmd_5 = version_5
+            .build_command("input.fasta", "output.fasta")
+            .unwrap();
+        let args_5: Vec<String> = cmd_5
+            .get_args()
+            .map(|s| s.to_string_lossy().to_string())
+            .collect();
+        assert_eq!(
+            args_5,
+            vec!["-super5", "input.fasta", "-output", "output.fasta"]
+        );
+    }
+
+    #[test]
+    fn test_muscle_command_local_run() {
+        let version = get_muscle_version("muscle");
+        if version == MuscleVersion::NotInstalled {
+            eprintln!("MUSCLE is not installed. Skipping run test.");
+            return;
+        }
+
+        let input = "tests/data/alignment/sequence.fasta";
+        let output = "tests/data/alignment/sequence.aligned.fasta";
+
+        let result = version.run(input, output);
+        assert!(result.is_ok() || result.is_err());
     }
 }

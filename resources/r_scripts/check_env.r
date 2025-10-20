@@ -4,6 +4,19 @@ dir.create(
   recursive = TRUE
 )
 
-packages <- c("ggplot2", "phangorn", "ape", "scales", "ggforce", "cowplot", "magrittr", "gridExtra")
+packages <- c("ggplot2",
+  "phangorn",
+  "ape",
+  "scales",
+  "ggforce",
+  "cowplot",
+  "magrittr",
+  "gridExtra"
+)
 
-install.packages(setdiff(packages, rownames(installed.packages())), lib = Sys.getenv("R_LIBS_USER"), repos = "https://cran.rstudio.com/")
+# Install packages that are not already installed
+install.packages(
+  setdiff(packages, rownames(installed.packages())),
+  lib = Sys.getenv("R_LIBS_USER"),
+  repos = "https://cran.rstudio.com/"
+)

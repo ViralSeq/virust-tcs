@@ -30,7 +30,6 @@ pub struct TcsReportSummary {
     region_summaries: Vec<RegionReportSummary>,
 }
 
-//TODO: Need to add resampling parameters to the summary
 impl TcsReportSummary {
     pub fn new() -> Self {
         TcsReportSummary {
