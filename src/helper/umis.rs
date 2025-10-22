@@ -1,5 +1,7 @@
 use std::collections::HashMap;
+use std::error::Error;
 
+use csv::Writer;
 use getset::{Getters, Setters};
 use itertools::Itertools;
 use serde::Deserialize;
@@ -44,6 +46,21 @@ impl UMISummary {
             .filter(|&(_, &count)| count > *self.umi_cut_off())
             .map(|(umi, &count)| (umi.clone(), count))
             .collect()
+    }
+
+    pub fn to_csv_string(&self) -> Result<String, Box<dyn Error>> {
+        let mut wtr = Writer::from_writer(vec![]);
+        wtr.write_record(&["umi", "count", "umi_cut_off"])?;
+
+        for (umi, count) in &self.umi_freq {
+            wtr.write_record(&[umi, &count.to_string(), &self.umi_cut_off.to_string()])?;
+        }
+
+        wtr.flush()?;
+
+        let csv_string = String::from_utf8(wtr.into_inner()?)?;
+
+        Ok(csv_string)
     }
 }
 

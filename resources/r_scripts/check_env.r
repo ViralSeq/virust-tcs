@@ -4,14 +4,19 @@ dir.create(
   recursive = TRUE
 )
 
-packages <- c("ggplot2",
+packages <- c(
+  "tidyverse",
   "phangorn",
   "ape",
   "scales",
   "ggforce",
   "cowplot",
   "magrittr",
-  "gridExtra"
+  "gridExtra",
+  "patchwork",
+  "plotly",
+  "finalfit",
+  "shiny"
 )
 
 # Install packages that are not already installed

@@ -2,3 +2,4 @@
 .DS_Store
 .test.json
 /tests/data/hivdr_control/run_log.txt
+/tests/test_log

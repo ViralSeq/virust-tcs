@@ -7,6 +7,7 @@ pub mod json;
 pub mod muscle;
 pub mod params;
 pub mod r;
+pub mod runner;
 pub mod tcs_helper;
 pub mod umi;
 pub mod umis;

@@ -1,0 +1,78 @@
+---
+title: "TCS Pipeline (viRust-tcs) Report "
+author: "Shuntai Zhou and Michael Clark @UNC-CH"
+format:
+  html:
+    toc: true              # enable table of contents
+    toc-location: left     # or "right"
+    toc-float: true        # make TOC floating
+    number-sections: true  # optional, for numbered headings
+    code-fold: false       # don’t allow toggling
+    code-summary: none
+    code-line-numbers: false
+    code-tools: false
+    code-copy: false
+    code-block-bg: false
+    code-block-border-left: false
+    theme: Superhero           # Superhero for dark theme. Materia or Cerualean for bright theme.
+    smooth-scroll: true
+    self-contained: true
+    embed-resources: true
+    fig-width: 12
+    fig-height: 6
+    page-layout: full
+execute:
+  echo: false              # hide all code by default
+  warning: false
+  message: false
+params:
+    batch_name: "test batch"
+    version: "0.2.0"
+---
+
+```{css}
+table tr:nth-child(even) {
+  background-color: #2b3b4b;
+}
+```
+
+Report generated on `r format(Sys.time(), "%Y-%m-%d %H:%M:%S")` using `tcs log` tool from [`virust-tcs`](https://github.com/ViralSeq/viRust-tcs)
+
+
+```{r}
+library(tidyverse)
+library(patchwork)
+library(plotly)
+theme_set(theme_bw())
+```
+
+
+```{r}
+data <- read_csv("log.csv")
+
+data1 <- data %>% select(lib_name, total_reads) %>% unique() 
+
+all_reads <- data1$total_reads %>% sum()
+
+```
+
+## Run Summary
+
+::: {.callout-important}
+
+Batch name: `r batch_name`
+
+TCS (viRust-tcs) version: `r version`
+
+Number of libraries: `r nrows(data1)`
+
+Total reads: `r all_reads` paired-end reads
+
+:::
+
+## Distribution of raw reads per library
+
+```{r}
+data1 %>% ggplot(aes(x = lib_name, y = total_reads)) +
+    geom_col()
+```
